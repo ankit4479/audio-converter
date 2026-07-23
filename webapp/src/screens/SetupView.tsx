@@ -4,7 +4,7 @@
  * ("Each section below is its own View struct, not a computed property" -
  * SetupView.swift:4-7) and its exact spacing, copy, and behaviour.
  */
-import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import {
   CODECS,
   CODEC_IDS,
@@ -26,6 +26,7 @@ import { durationLabel, totalSizeLabel } from '../intake/labels'
 import { scanDroppedItems } from '../intake/scanDropped'
 import { scanFileList } from '../intake/scanFileList'
 import { getCodecAvailabilityInfo } from '../ui/formatAvailability'
+import { useReducedMotion } from './useReducedMotion'
 
 export interface SetupSettings {
   codec: CodecId
@@ -130,28 +131,8 @@ function DropZoneSection({ store }: { store: FileIntakeStore }) {
 // version's single shared boolean rather than staggered per-bar timing.
 const WAVEFORM_HEIGHTS = [14, 26, 38, 20, 32, 16, 34, 22, 12]
 
-function subscribeToReducedMotion(onChange: () => void): () => void {
-  if (typeof window.matchMedia !== 'function') return () => {}
-  const query = window.matchMedia('(prefers-reduced-motion: reduce)')
-  query.addEventListener('change', onChange)
-  return () => query.removeEventListener('change', onChange)
-}
-
-function getReducedMotionSnapshot(): boolean {
-  return typeof window.matchMedia === 'function'
-    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    : false
-}
-
 function Waveform() {
-  // useSyncExternalStore, not useEffect+setState: matchMedia is exactly the kind of
-  // external, changing-outside-React source this hook exists for, and calling
-  // setState directly in an effect body causes an avoidable extra render pass.
-  const reduceMotion = useSyncExternalStore(
-    subscribeToReducedMotion,
-    getReducedMotionSnapshot,
-    () => false,
-  )
+  const reduceMotion = useReducedMotion()
 
   return (
     <div className="flex h-10 items-end gap-1">

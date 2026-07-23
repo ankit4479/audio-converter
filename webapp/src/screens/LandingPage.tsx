@@ -1,15 +1,21 @@
 /**
  * The marketing frame around the actual tool (SetupView/ConvertView, passed in as
  * children). Unlike the rest of screens/, this has no Swift source to port from -
- * the native app is a single window, it doesn't need a landing page. Sizing and
- * copy here are new, not ported, so they intentionally don't use the small
- * macOS-parity type scale in styles/tokens.css (text-body, text-title, etc.) - this
- * reaches for Tailwind's own default scale (text-4xl and friends) instead.
+ * the native app is a single window, it doesn't need a landing page. Sizing, copy,
+ * and components here are new, not ported: type sizes reach for Tailwind's own
+ * default scale (text-4xl and friends) rather than the small macOS-parity scale in
+ * styles/tokens.css, and structural pieces (buttons, badges, cards) come from
+ * src/components/ui (shadcn/ui) rather than the hand-rolled elements the rest of
+ * the app uses - see index.css for how those are bridged onto this app's own
+ * color tokens instead of shadcn's defaults.
  */
 import type { ReactNode } from 'react'
+import { Badge } from '../components/ui/badge'
+import { Button } from '../components/ui/button'
+import { Card, CardContent } from '../components/ui/card'
+import { ConversionDemo } from './ConversionDemo'
 
 const GITHUB_URL = 'https://github.com/ankit4479/audio-converter'
-const MACOS_RELEASES_URL = 'https://github.com/ankit4479/audio-converter/releases'
 
 export function LandingPage({
   screen,
@@ -29,10 +35,11 @@ export function LandingPage({
         // screen reader user still lands on a heading rather than none at all.
         <h1 className="sr-only">Audio Converter</h1>
       )}
-      {children}
+      <div id="tool">{children}</div>
       {screen === 'setup' && (
         <>
-          <ExplainerSection />
+          <PrivacySection />
+          <HowItWorksSection />
           <SiteFooter />
         </>
       )}
@@ -43,87 +50,93 @@ export function LandingPage({
 function SiteHeader() {
   return (
     <header className="border-b border-border">
-      <div className="mx-auto flex max-w-[680px] items-center justify-between px-6 py-4">
+      <div className="mx-auto flex max-w-[760px] items-center justify-between px-6 py-4">
         <span className="font-semibold text-text-primary">Audio Converter</span>
-        <a
-          href={GITHUB_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="text-callout text-text-secondary underline"
-        >
-          View source
-        </a>
+        <Badge variant="outline">Private by design</Badge>
       </div>
     </header>
   )
 }
 
-const FEATURES = [
-  'No upload, ever',
-  'Convert a whole folder at once',
-  'MIT licensed, source on GitHub',
-]
-
 function Hero() {
   return (
-    <div className="mx-auto max-w-[680px] px-6 pb-10 pt-16 text-center">
+    <div className="mx-auto max-w-[760px] px-6 pb-12 pt-16 text-center">
       <h1 className="text-4xl font-bold tracking-tight text-text-primary sm:text-5xl">
-        Convert audio without uploading it anywhere
+        Your audio never leaves your device
       </h1>
       <p className="mx-auto mt-4 max-w-[480px] text-lg text-text-secondary">
-        Drop in MP3, FLAC, WAV, AAC, or Opus files, pick a format, and get them back
-        converted. Everything runs in this browser tab, and nothing you drop in ever
-        leaves your machine.
+        Drop in a file, pick a format, get it back. No account, no upload, no catch.
       </p>
-      <ul className="mt-6 flex flex-wrap justify-center gap-2">
-        {FEATURES.map((feature) => (
-          <li
-            key={feature}
-            className="rounded-full border border-border px-3 py-1 text-callout text-text-secondary"
-          >
-            {feature}
-          </li>
-        ))}
-      </ul>
+      <div className="mt-8 flex justify-center">
+        <Button size="lg" asChild>
+          <a href="#tool">Start converting</a>
+        </Button>
+      </div>
+      <div className="mt-12">
+        <ConversionDemo />
+      </div>
     </div>
   )
 }
 
-function ExplainerSection() {
+const PRIVACY_POINTS = [
+  {
+    title: 'Nothing leaves your device',
+    body: 'Every conversion happens right here, in this browser tab. Your files are never sent anywhere, not even to us.',
+  },
+  {
+    title: 'Nothing is tracked',
+    body: 'No account, no record of what you convert, no analytics watching your files.',
+  },
+  {
+    title: 'Nothing to install',
+    body: 'Open the page and go. No app to download, no permissions to grant.',
+  },
+]
+
+function PrivacySection() {
   return (
-    <div className="mx-auto max-w-[680px] space-y-10 px-6 py-16">
-      <section>
-        <h2 className="text-2xl font-semibold text-text-primary">How this works</h2>
-        <p className="mt-3 text-body text-text-secondary">
-          Conversion runs on WebCodecs, the same low-level encoding API built into your
-          browser that video editors and streaming apps use. For the one format browsers
-          don't ship an encoder for, MP3, a small WebAssembly encoder fills the gap, and
-          it only downloads once you actually pick MP3. There's no server on the other end
-          of this waiting for your files. If you turn off your Wi-Fi mid-conversion, it
-          keeps working.
-        </p>
-      </section>
-      <section>
-        <h2 className="text-2xl font-semibold text-text-primary">Why it's open source</h2>
-        <p className="mt-3 text-body text-text-secondary">
-          The full source for this page, and for a native macOS app built on ffmpeg with a
-          few more formats than a browser can encode, is on{' '}
-          <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="underline">
-            GitHub
-          </a>{' '}
-          under the MIT license. Read it, run it yourself, or send a fix. If you'd rather
-          have the desktop version, it's in{' '}
-          <a
-            href={MACOS_RELEASES_URL}
-            target="_blank"
-            rel="noreferrer"
-            className="underline"
-          >
-            Releases
-          </a>
-          .
-        </p>
-      </section>
+    <div className="mx-auto max-w-[760px] px-6 py-16">
+      <h2 className="text-center text-2xl font-semibold text-text-primary">
+        Built around one rule: your files stay yours
+      </h2>
+      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+        {PRIVACY_POINTS.map((point) => (
+          <Card key={point.title}>
+            <CardContent>
+              <h3 className="font-semibold text-text-primary">{point.title}</h3>
+              <p className="mt-2 text-callout text-text-secondary">{point.body}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+const STEPS = [
+  { title: 'Drop your files', body: 'A song, an album, or a whole folder.' },
+  { title: 'Pick a format', body: 'MP3, FLAC, WAV, AAC, Opus, and more.' },
+  { title: 'Get them back', body: 'Converted, right where you dropped them from.' },
+]
+
+function HowItWorksSection() {
+  return (
+    <div className="mx-auto max-w-[760px] px-6 pb-16">
+      <h2 className="text-center text-2xl font-semibold text-text-primary">
+        How it works
+      </h2>
+      <ol className="mt-8 grid gap-6 sm:grid-cols-3">
+        {STEPS.map((step, i) => (
+          <li key={step.title} className="text-center">
+            <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-accent text-body-sm font-semibold text-accent-ink">
+              {i + 1}
+            </div>
+            <h3 className="mt-3 font-semibold text-text-primary">{step.title}</h3>
+            <p className="mt-1 text-callout text-text-secondary">{step.body}</p>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }
@@ -131,9 +144,9 @@ function ExplainerSection() {
 function SiteFooter() {
   return (
     <footer className="border-t border-border py-8 text-center text-caption text-text-secondary">
-      MIT licensed.{' '}
+      Free and open source.{' '}
       <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="underline">
-        ankit4479/audio-converter
+        View the code
       </a>
     </footer>
   )

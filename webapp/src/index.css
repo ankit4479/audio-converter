@@ -1,8 +1,108 @@
 @import 'tailwindcss';
 @import './styles/tokens.css';
+@import 'tw-animate-css';
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * The two pieces of shadcn/ui's own tailwind.css actually needed for
+ * src/components/ui - accordion keyframes and Radix data-state variants -
+ * copied in directly rather than depending on the `shadcn` package for one CSS
+ * file. The rest of that file (scroll-fade masks, shimmer text effects) is dead
+ * weight nothing here uses, and `shadcn` itself pulls in an MCP server dependency
+ * chain with a known moderate CVE (path traversal in @hono/node-server) that has
+ * no reason to be an installed dependency of a static site.
+ */
+@theme inline {
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height, auto);
+    }
+  }
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height, auto);
+    }
+    to {
+      height: 0;
+    }
+  }
+}
+
+@custom-variant data-open {
+  &:where([data-state='open']),
+  &:where([data-open]:not([data-open='false'])) {
+    @slot;
+  }
+}
+@custom-variant data-closed {
+  &:where([data-state='closed']),
+  &:where([data-closed]:not([data-closed='false'])) {
+    @slot;
+  }
+}
+@custom-variant data-disabled {
+  &:where([data-disabled='true']),
+  &:where([data-disabled]:not([data-disabled='false'])) {
+    @slot;
+  }
+}
 
 body {
   background-color: var(--color-surface-page);
   color: var(--color-text-primary);
   color-scheme: light dark;
+}
+
+/*
+ * shadcn/ui (src/components/ui/*, the landing page's component library) bridged
+ * onto our own tokens.css variables rather than shadcn's own default palette - this
+ * app's theming is OS `prefers-color-scheme`-driven (tokens.css), not the `.dark`
+ * class shadcn assumes, so left as generated, every shadcn component would render
+ * its static light palette even when the OS - and the rest of this app - is in
+ * dark mode. Only the semantic tokens actually used by src/components/ui are
+ * bridged here; add more as needed rather than pulling in shadcn's full palette.
+ */
+@theme inline {
+  --color-background: var(--color-surface-page);
+  --color-foreground: var(--color-text-primary);
+  --color-card: var(--color-surface);
+  --color-card-foreground: var(--color-text-primary);
+  --color-popover: var(--color-surface);
+  --color-popover-foreground: var(--color-text-primary);
+  --color-primary: var(--color-accent);
+  --color-primary-foreground: var(--color-accent-ink);
+  --color-secondary: var(--color-surface);
+  --color-secondary-foreground: var(--color-text-primary);
+  --color-muted: var(--color-surface);
+  --color-muted-foreground: var(--color-text-secondary);
+  --color-destructive: oklch(0.577 0.245 27.325);
+  --color-ring: var(--color-accent);
+  --color-input: var(--color-border);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --radius: 0.625rem;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }

@@ -126,3 +126,20 @@
 .animate-waveform {
   animation: waveform-grow 0.9s ease-in-out infinite alternate;
 }
+
+/* Landing page's conversion demo (screens/ConversionDemo.tsx): a dot travels
+   left to right along the connector between the "before" and "after" file
+   chips, looping. Frozen at 50% (mid-travel, not hidden) when reduced motion
+   is requested, the same way the waveform freezes at a static height instead
+   of disappearing. */
+@keyframes flow-dot {
+  from {
+    left: 0%;
+  }
+  to {
+    left: 100%;
+  }
+}
+.animate-flow-dot {
+  animation: flow-dot 1.6s linear infinite;
+}

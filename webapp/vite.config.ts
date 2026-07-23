@@ -1,3 +1,4 @@
+import path from 'node:path'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -12,6 +13,10 @@ const crossOriginIsolationHeaders = {
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  // Only for src/components/ui (shadcn/ui, the landing page's component library) -
+  // shadcn's own CLI generates imports through this alias, and the rest of the app
+  // keeps using its existing relative imports rather than adopting it everywhere.
+  resolve: { alias: { '@': path.resolve(__dirname, './src') } },
   server: { headers: crossOriginIsolationHeaders },
   preview: { headers: crossOriginIsolationHeaders },
   // Vite's default worker.format is 'iife', which can't use dynamic import() for
