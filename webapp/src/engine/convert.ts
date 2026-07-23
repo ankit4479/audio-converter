@@ -20,6 +20,7 @@ import {
   Input,
   Output,
 } from 'mediabunny'
+import { aiffFileName, wavToAiff } from './aiff'
 import { SAMPLE_RATE_HZ, type ConversionSettings } from './codec'
 import { encodableFormatFor, outputFileName } from './formats'
 
@@ -113,6 +114,25 @@ export async function convertFile(
   options: ConvertOptions = {},
 ): Promise<ConvertResult> {
   throwIfAborted(options.signal)
+
+  if (settings.codec === 'aiff') {
+    // No Mediabunny OutputFormat exists for AIFF at all (aiff.ts's header comment has
+    // the confirmation), so this isn't in the ENCODABLE_FORMATS table below - it
+    // reuses the already-correct WAV path for decode/resample/channels, then
+    // transforms that little-endian PCM into AIFF's big-endian container by hand.
+    const wavResult = await convertFile(
+      file,
+      baseName,
+      { ...settings, codec: 'wav' },
+      options,
+    )
+    const wavBytes = new Uint8Array(await wavResult.blob.arrayBuffer())
+    const aiffBytes = wavToAiff(wavBytes)
+    return {
+      blob: new Blob([aiffBytes.buffer as ArrayBuffer], { type: 'audio/aiff' }),
+      fileName: aiffFileName(baseName),
+    }
+  }
 
   const encodable = encodableFormatFor(settings.codec)
   if (!encodable) {

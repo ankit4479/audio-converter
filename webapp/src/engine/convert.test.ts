@@ -68,7 +68,7 @@ const BASE_SETTINGS: ConversionSettings = {
 }
 
 describe('convertFile - not-implemented codecs', () => {
-  const IMPLEMENTED_CODECS = new Set(['wav', 'mp3', 'aac', 'opus', 'flac'])
+  const IMPLEMENTED_CODECS = new Set(['wav', 'mp3', 'aac', 'opus', 'flac', 'aiff'])
   it.each(CODEC_IDS.filter((id) => !IMPLEMENTED_CODECS.has(id)))(
     'rejects %s with reason not-implemented, without touching the file at all',
     async (codec) => {
@@ -401,4 +401,64 @@ describe('convertFile - FLAC end to end', () => {
       expect(sizes[1]).toBe(sizes[2])
     },
   )
+})
+
+describe('convertFile - AIFF end to end', () => {
+  it('produces a valid big-endian AIFF file with matching channel count, sample rate, and duration', async () => {
+    const result = await convertFile(makeWav(44100 * 2, 44100), 'test', {
+      ...BASE_SETTINGS,
+      codec: 'aiff',
+    })
+    expect(result.fileName).toBe('test.aiff')
+    expect(result.blob.type).toBe('audio/aiff')
+
+    const bytes = new Uint8Array(await result.blob.arrayBuffer())
+    const view = new DataView(bytes.buffer)
+    const ascii = (offset: number, len: number) =>
+      String.fromCharCode(...bytes.subarray(offset, offset + len))
+
+    expect(ascii(0, 4)).toBe('FORM')
+    expect(ascii(8, 4)).toBe('AIFF')
+    expect(view.getUint16(20, false)).toBe(1) // mono, matches the source
+    expect(view.getUint32(22, false)).toBe(88200) // 2 seconds at 44100Hz
+    expect(view.getUint16(28, false)).toBe(0x400e) // 44100Hz as an 80-bit float
+  })
+
+  it('round trips to PCM identical to the source, confirmed big-endian by inspecting the bytes', async () => {
+    const sourceWav = makeWav(4000, 8000)
+    const sourcePcm = new Uint8Array(await sourceWav.arrayBuffer()).slice(44)
+
+    const result = await convertFile(sourceWav, 'test', {
+      ...BASE_SETTINGS,
+      codec: 'aiff',
+    })
+    const aiffBytes = new Uint8Array(await result.blob.arrayBuffer())
+
+    // SSND data starts at 38 (FORM+AIFF+COMM) + 16 (SSND id/size/offset/blockSize).
+    const ssndDataStart = 38 + 16
+    const ssndData = aiffBytes.slice(ssndDataStart)
+    expect(ssndData.length).toBe(sourcePcm.length)
+
+    // Byte-swap AIFF's big-endian samples back to little-endian and compare directly
+    // against the source - this is both the round-trip and the big-endian check the
+    // issue asks for, verified from the actual bytes rather than "by ear".
+    const swappedBack = new Uint8Array(ssndData.length)
+    for (let i = 0; i < ssndData.length; i += 2) {
+      swappedBack[i] = ssndData[i + 1]
+      swappedBack[i + 1] = ssndData[i]
+    }
+    expect(swappedBack).toEqual(sourcePcm)
+  })
+
+  it('resamples when a sample rate is requested, same as the WAV path it reuses', async () => {
+    const result = await convertFile(makeWav(4000, 8000), 'test', {
+      ...BASE_SETTINGS,
+      codec: 'aiff',
+      sampleRate: 'hz44100',
+    })
+    const bytes = new Uint8Array(await result.blob.arrayBuffer())
+    const view = new DataView(bytes.buffer)
+    expect(view.getUint16(28, false)).toBe(0x400e) // 44100's biased exponent
+    expect(view.getUint32(30, false)).toBe(0xac440000)
+  })
 })
