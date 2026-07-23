@@ -51,7 +51,7 @@ const BASE_SETTINGS: ConversionSettings = {
 }
 
 describe('convertFile - not-implemented codecs', () => {
-  it.each(CODEC_IDS.filter((id) => id !== 'wav'))(
+  it.each(CODEC_IDS.filter((id) => id !== 'wav' && id !== 'mp3'))(
     'rejects %s with reason not-implemented, without touching the file at all',
     async (codec) => {
       // A garbage file that would fail as "unreadable" if convertFile got far enough
@@ -181,5 +181,63 @@ describe('convertFile - WAV end to end', () => {
     expect(onProgress).toHaveBeenCalled()
     const last = onProgress.mock.calls.at(-1)?.[0]
     expect(last.fraction).toBeGreaterThan(0)
+  })
+})
+
+describe('convertFile - MP3 end to end', () => {
+  // 2 seconds at 44.1kHz mono, long enough for the CBR bitrate to stabilize past LAME's
+  // initial buffering and for getAverageBitrate() to reflect the real encoded rate.
+  const twoSecondsOfAudio = () => makeWav(44100 * 2, 44100)
+
+  it.each([
+    ['best', 245_000],
+    ['good', 190_000],
+    ['small', 130_000],
+  ] as const)(
+    'encodes %s quality at the expected LAME V0/V2/V5 average bitrate (%dbps)',
+    async (quality, expectedBitrate) => {
+      const result = await convertFile(twoSecondsOfAudio(), 'test', {
+        ...BASE_SETTINGS,
+        codec: 'mp3',
+        quality,
+      })
+
+      expect(result.fileName).toBe('test.mp3')
+      expect(result.blob.type).toBe('audio/mpeg')
+
+      const reread = new Input({
+        source: new BlobSource(result.blob),
+        formats: ALL_FORMATS,
+      })
+      expect(await reread.canRead()).toBe(true)
+      const track = await reread.getPrimaryAudioTrack()
+      expect(track).not.toBeNull()
+      expect(track!.codec).toBe('mp3')
+      expect(await reread.computeDuration()).toBeCloseTo(2, 0)
+
+      // CBR, so the actual encoded bitrate should land almost exactly on the target -
+      // this is the acceptance criterion ("bitrates land in the expected V0/V2/V5
+      // ranges"), computed from the real encoded packets, not just the request.
+      // (getAverageBitrate() reads stream metadata rather than computing from packets,
+      // and returned null here - Mp3OutputFormat apparently doesn't write a bitrate
+      // metadata field the demuxer reads back out.)
+      const { averageBitrate } = await track!.computePacketStats()
+      expect(averageBitrate).toBeGreaterThan(expectedBitrate * 0.9)
+      expect(averageBitrate).toBeLessThan(expectedBitrate * 1.1)
+    },
+  )
+
+  it('produces meaningfully different file sizes across the three tiers', async () => {
+    const sizes: Record<string, number> = {}
+    for (const quality of ['best', 'good', 'small'] as const) {
+      const result = await convertFile(twoSecondsOfAudio(), 'test', {
+        ...BASE_SETTINGS,
+        codec: 'mp3',
+        quality,
+      })
+      sizes[quality] = result.blob.size
+    }
+    expect(sizes.best).toBeGreaterThan(sizes.good)
+    expect(sizes.good).toBeGreaterThan(sizes.small)
   })
 })

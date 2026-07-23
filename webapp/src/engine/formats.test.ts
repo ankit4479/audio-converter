@@ -3,9 +3,14 @@ import { CODEC_IDS } from './codec'
 import { ENCODABLE_FORMATS, encodableFormatFor, outputFileName } from './formats'
 
 describe('ENCODABLE_FORMATS', () => {
-  it('only WAV is wired up in issue #4 - everything else is explicitly not-yet-implemented', () => {
+  it('WAV (#4) and MP3 (#5) are wired up - everything else is explicitly not-yet-implemented', () => {
     const implemented = CODEC_IDS.filter((id) => ENCODABLE_FORMATS[id] !== null)
-    expect(implemented).toEqual(['wav'])
+    expect(implemented).toEqual(['mp3', 'wav'])
+  })
+
+  it('WAV has no bitrate concept; MP3 always resolves one', () => {
+    expect(ENCODABLE_FORMATS.wav?.resolveBitrate).toBeUndefined()
+    expect(ENCODABLE_FORMATS.mp3?.resolveBitrate).toBeTypeOf('function')
   })
 
   it('has an entry (implemented or null) for every codec, none missing', () => {

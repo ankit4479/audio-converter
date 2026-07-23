@@ -117,6 +117,9 @@ export async function convertFile(
     )
   }
 
+  await encodable.ensureReady?.()
+  throwIfAborted(options.signal)
+
   let input: Input
   try {
     input = new Input({ source: new BlobSource(file), formats: ALL_FORMATS })
@@ -148,6 +151,7 @@ export async function convertFile(
     audio: {
       codec: encodable.audioCodec,
       sampleRate: SAMPLE_RATE_HZ[settings.sampleRate],
+      bitrate: encodable.resolveBitrate?.(settings),
     },
     // Metadata/cover art passthrough is issue #8's job; omitting `tags` here already
     // makes Conversion default to copying the input's tags (including embedded
