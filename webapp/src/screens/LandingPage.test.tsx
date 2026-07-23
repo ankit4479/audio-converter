@@ -1,9 +1,9 @@
-import { render, screen } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { fireEvent, render, screen } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { LandingPage } from './LandingPage'
 
 describe('LandingPage - setup screen', () => {
-  it('shows the header, hero, privacy, and how-it-works sections around the tool', () => {
+  it('shows the header, hero, privacy, and how-it-works sections, with the tool hidden until "Start converting" is clicked', () => {
     render(
       <LandingPage screen="setup">
         <p>the tool goes here</p>
@@ -16,7 +16,7 @@ describe('LandingPage - setup screen', () => {
         name: 'Your audio never leaves your device',
       }),
     ).toBeInTheDocument()
-    expect(screen.getByText('the tool goes here')).toBeInTheDocument()
+    expect(screen.queryByText('the tool goes here')).not.toBeInTheDocument()
     expect(
       screen.getByRole('heading', {
         name: 'Built around one rule: your files stay yours',
@@ -26,6 +26,37 @@ describe('LandingPage - setup screen', () => {
     expect(
       screen.getByText('Free and open source.', { exact: false }),
     ).toBeInTheDocument()
+  })
+
+  it('reveals the tool once "Start converting" is clicked', () => {
+    render(
+      <LandingPage screen="setup">
+        <p>the tool goes here</p>
+      </LandingPage>,
+    )
+    expect(screen.queryByText('the tool goes here')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start converting' }))
+
+    expect(screen.getByText('the tool goes here')).toBeInTheDocument()
+  })
+
+  it('scrolls to the tool again on a second click, after the user has scrolled back up to the hero', () => {
+    const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView')
+    render(
+      <LandingPage screen="setup">
+        <p>the tool goes here</p>
+      </LandingPage>,
+    )
+    const startButton = screen.getByRole('button', { name: 'Start converting' })
+
+    fireEvent.click(startButton)
+    expect(scrollSpy).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(startButton)
+    expect(scrollSpy).toHaveBeenCalledTimes(2)
+
+    scrollSpy.mockRestore()
   })
 
   it('does not have a dedicated "why open source" section with its own link out', () => {
@@ -46,22 +77,10 @@ describe('LandingPage - setup screen', () => {
     expect(githubLinks[0]).toHaveAttribute('target', '_blank')
     expect(githubLinks[0]).toHaveAttribute('rel', 'noreferrer')
   })
-
-  it('the "Start converting" button anchors straight to the tool', () => {
-    render(
-      <LandingPage screen="setup">
-        <p>tool</p>
-      </LandingPage>,
-    )
-    expect(screen.getByRole('link', { name: 'Start converting' })).toHaveAttribute(
-      'href',
-      '#tool',
-    )
-  })
 })
 
 describe('LandingPage - convert screen', () => {
-  it('hides the visible hero and marketing sections, keeping only the header, to stay focused on progress', () => {
+  it('hides the visible hero and marketing sections, keeping only the header and the tool, to stay focused on progress', () => {
     render(
       <LandingPage screen="convert">
         <p>converting now</p>

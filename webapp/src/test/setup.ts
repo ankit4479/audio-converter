@@ -32,3 +32,12 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
       dispatchEvent: () => false,
     }) as MediaQueryList
 }
+
+// jsdom doesn't implement Element.scrollIntoView at all - calling it throws "is not
+// a function". LandingPage calls it when "Start converting" reveals the tool.
+if (
+  typeof Element !== 'undefined' &&
+  typeof Element.prototype.scrollIntoView !== 'function'
+) {
+  Element.prototype.scrollIntoView = () => {}
+}

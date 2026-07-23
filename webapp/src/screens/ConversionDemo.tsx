@@ -37,7 +37,7 @@ export function ConversionDemo() {
 
   return (
     <div className="flex items-center justify-center gap-4 sm:gap-6">
-      <FileChip label="MP3" />
+      <FileChip label="FLAC" />
       <div className="relative h-px w-16 flex-1 max-w-24 bg-border sm:w-24">
         <span
           className={`absolute top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-accent ${
@@ -45,7 +45,7 @@ export function ConversionDemo() {
           }`}
         />
       </div>
-      <FileChip label="FLAC" />
+      <FileChip label="MP3" />
     </div>
   )
 }

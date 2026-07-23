@@ -9,7 +9,7 @@
  * the app uses - see index.css for how those are bridged onto this app's own
  * color tokens instead of shadcn's defaults.
  */
-import type { ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Card, CardContent } from '../components/ui/card'
@@ -24,18 +24,47 @@ export function LandingPage({
   screen: 'setup' | 'convert'
   children: ReactNode
 }) {
+  // The tool itself doesn't render at all until "Start converting" is clicked - a
+  // conversion already in progress (screen === 'convert') always shows it, since
+  // that can only happen after this was already true once.
+  const [toolRevealed, setToolRevealed] = useState(false)
+  const showTool = toolRevealed || screen === 'convert'
+  const toolRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (toolRevealed)
+      toolRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [toolRevealed])
+
+  // The first click flips toolRevealed, which mounts #tool and lets the effect
+  // above scroll to it once it exists. A later click - the user scrolled back up
+  // to the hero and pressed it again - wouldn't change that already-true state, so
+  // the effect would never re-fire; scrolling directly here instead handles that
+  // case too, since the ref is already attached by then.
+  const handleStart = () => {
+    if (toolRevealed) {
+      toolRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    } else {
+      setToolRevealed(true)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-surface-page">
       <SiteHeader />
       {screen === 'setup' ? (
-        <Hero />
+        <Hero onStart={handleStart} />
       ) : (
         // Hero (the page's only <h1>) is hidden on this screen to stay focused on
         // progress - this keeps one in the accessibility tree regardless, so a
         // screen reader user still lands on a heading rather than none at all.
         <h1 className="sr-only">Audio Converter</h1>
       )}
-      <div id="tool">{children}</div>
+      {showTool && (
+        <div id="tool" ref={toolRef} className="scroll-mt-6">
+          {children}
+        </div>
+      )}
       {screen === 'setup' && (
         <>
           <PrivacySection />
@@ -58,21 +87,19 @@ function SiteHeader() {
   )
 }
 
-function Hero() {
+function Hero({ onStart }: { onStart: () => void }) {
   return (
-    <div className="mx-auto max-w-[760px] px-6 pb-12 pt-16 text-center">
+    <div className="mx-auto flex min-h-[75vh] max-w-[760px] flex-col items-center justify-center px-6 py-16 text-center">
       <h1 className="text-4xl font-bold tracking-tight text-text-primary sm:text-5xl">
         Your audio never leaves your device
       </h1>
       <p className="mx-auto mt-4 max-w-[480px] text-lg text-text-secondary">
         Drop in a file, pick a format, get it back. No account, no upload, no catch.
       </p>
-      <div className="mt-8 flex justify-center">
-        <Button size="lg" asChild>
-          <a href="#tool">Start converting</a>
-        </Button>
-      </div>
-      <div className="mt-12">
+      <Button size="lg" className="mt-8" onClick={onStart}>
+        Start converting
+      </Button>
+      <div className="mt-16">
         <ConversionDemo />
       </div>
     </div>
