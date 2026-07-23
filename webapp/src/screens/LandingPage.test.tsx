@@ -59,6 +59,25 @@ describe('LandingPage - setup screen', () => {
     scrollSpy.mockRestore()
   })
 
+  it('places privacy and how-it-works between the hero and the tool, so the tool never sits directly under the header', () => {
+    const { container } = render(
+      <LandingPage screen="setup">
+        <p>the tool goes here</p>
+      </LandingPage>,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Start converting' }))
+
+    const text = container.textContent ?? ''
+    const heroIndex = text.indexOf('Your audio never leaves your device')
+    const privacyIndex = text.indexOf('Built around one rule')
+    const howItWorksIndex = text.indexOf('How it works')
+    const toolIndex = text.indexOf('the tool goes here')
+
+    expect(heroIndex).toBeLessThan(privacyIndex)
+    expect(privacyIndex).toBeLessThan(howItWorksIndex)
+    expect(howItWorksIndex).toBeLessThan(toolIndex)
+  })
+
   it('does not have a dedicated "why open source" section with its own link out', () => {
     render(
       <LandingPage screen="setup">

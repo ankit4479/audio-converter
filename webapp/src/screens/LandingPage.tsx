@@ -60,18 +60,18 @@ export function LandingPage({
         // screen reader user still lands on a heading rather than none at all.
         <h1 className="sr-only">Audio Converter</h1>
       )}
+      {screen === 'setup' && (
+        <>
+          <PrivacySection />
+          <HowItWorksSection />
+        </>
+      )}
       {showTool && (
         <div id="tool" ref={toolRef} className="scroll-mt-6">
           {children}
         </div>
       )}
-      {screen === 'setup' && (
-        <>
-          <PrivacySection />
-          <HowItWorksSection />
-          <SiteFooter />
-        </>
-      )}
+      {screen === 'setup' && <SiteFooter />}
     </div>
   )
 }
