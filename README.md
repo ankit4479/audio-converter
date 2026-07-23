@@ -5,6 +5,20 @@ back converted. Everything happens on your machine — nothing is uploaded anywh
 
 Built with SwiftUI, using [ffmpeg](https://ffmpeg.org) as the conversion engine.
 
+## Two apps, one repo
+
+This repo holds two separate builds of the same idea:
+
+- **The macOS app** (`Sources/AudioConverter/`, described below) — install it, it uses
+  your system's ffmpeg.
+- **The web app** (`webapp/`) — open a link, drag files in, nothing is uploaded. It
+  can't shell out to ffmpeg, so it converts audio in the browser itself using
+  [Mediabunny](https://mediabunny.dev) and [WebCodecs](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API),
+  with a WASM encoder filling in for MP3 since no browser ships one natively. See
+  [`webapp/README.md`](webapp/README.md) for that app's own setup and format support.
+
+Neither app depends on the other. Changes to one don't require touching the other.
+
 ## Formats
 
 | | Format | Notes |
@@ -91,6 +105,8 @@ Sources/AudioConverter/
     ConversionEngine.swift  job queue, concurrency, cancellation
     FFmpegLocator.swift     finds ffmpeg on the system
     FileIntake.swift        file and folder intake
+
+webapp/                     the browser app, see webapp/README.md
 ```
 
 ## License
