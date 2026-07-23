@@ -1,0 +1,108 @@
+/*
+ * Design tokens ported from the macOS app (Sources/AudioConverter/Theme.swift and
+ * the Views/ files). This is the single source of truth: every color, radius, and
+ * font size the web app uses lives here, exposed as Tailwind v4 theme variables so
+ * components consume them as utility classes (bg-accent, rounded-card, text-callout)
+ * rather than hardcoded values.
+ *
+ * Two kinds of value below:
+ *  - accent/accentHover/accentInk/success are literal hex codes taken directly from
+ *    Theme.swift, exact.
+ *  - surface/border/text-secondary approximate NSColor.controlBackgroundColor and
+ *    secondaryLabelColor, which are dynamic system colors Apple does not publish as
+ *    fixed hex (and which can shift slightly across macOS releases). These are
+ *    visually matched, not extracted, per the issue's own instruction to "pick
+ *    values that read the same way in a browser."
+ */
+@theme {
+  /* Theme.swift:8-24 */
+  --color-accent: #fa2359;
+  --color-accent-hover: #ff4470;
+  --color-accent-ink: #ffffff;
+  /* Theme.swift:26 - Apple's documented systemGreen (HIG system colors, light) */
+  --color-success: #34c759;
+
+  --color-surface: #ffffff;
+  --color-surface-page: #ececec;
+  --color-border: rgb(0 0 0 / 0.12);
+  --color-text-primary: #1d1d1f;
+  --color-text-secondary: #6e6e73;
+
+  /* Radii actually used: SetupView.swift (9, 12), ConvertView.swift (9, 14) */
+  --radius-chip: 9px;
+  --radius-dropzone: 12px;
+  --radius-card: 14px;
+
+  /*
+   * Type scale actually used across SetupView.swift and ConvertView.swift.
+   * caption/callout are macOS's SwiftUI Font.caption (10pt) and Font.callout
+   * (12pt) system text styles; the rest are literal .system(size:) points from
+   * the views. macOS points map 1:1 to CSS px, same convention already used for
+   * the mono sizes and radii above.
+   */
+  --text-mono-xs: 11px;
+  --text-mono-sm: 12px;
+  --text-caption: 10px;
+  --text-callout: 12px;
+  --text-body-sm: 13px;
+  --text-body: 14px;
+  --text-body-lg: 15px;
+  --text-title: 17px;
+
+  --font-mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/*
+ * Dark values, same tokens. Mirrors the Mac app switching on NSAppearance.
+ * Also exposed as .force-light/.force-dark classes so the token preview page
+ * (see src/dev/TokenPreview.tsx) can render a light pane and a dark pane side
+ * by side for comparison against a Mac screenshot, regardless of the browser's
+ * actual OS setting. Without .force-light, a light pane viewed on a machine set
+ * to dark mode would incorrectly inherit the dark :root overrides below, since
+ * custom properties cascade from :root to every descendant. Production styling
+ * only ever uses the media query; the two force-* classes exist solely for that
+ * preview page.
+ */
+.force-light {
+  color-scheme: light;
+  --color-accent: #fa2359;
+  --color-accent-hover: #ff4470;
+  --color-accent-ink: #ffffff;
+  --color-success: #34c759;
+
+  --color-surface: #ffffff;
+  --color-surface-page: #ececec;
+  --color-border: rgb(0 0 0 / 0.12);
+  --color-text-primary: #1d1d1f;
+  --color-text-secondary: #6e6e73;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-accent: #ff5c82;
+    --color-accent-hover: #ff7fa0;
+    --color-accent-ink: #2a0a14;
+    /* HIG system colors, dark */
+    --color-success: #30d158;
+
+    --color-surface: #1e1e1e;
+    --color-surface-page: #262626;
+    --color-border: rgb(255 255 255 / 0.14);
+    --color-text-primary: #f5f5f7;
+    --color-text-secondary: #98989d;
+  }
+}
+
+.force-dark {
+  color-scheme: dark;
+  --color-accent: #ff5c82;
+  --color-accent-hover: #ff7fa0;
+  --color-accent-ink: #2a0a14;
+  --color-success: #30d158;
+
+  --color-surface: #1e1e1e;
+  --color-surface-page: #262626;
+  --color-border: rgb(255 255 255 / 0.14);
+  --color-text-primary: #f5f5f7;
+  --color-text-secondary: #98989d;
+}

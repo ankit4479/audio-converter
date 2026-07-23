@@ -4,7 +4,7 @@
 function App() {
   return (
     <main className="flex min-h-screen items-center justify-center">
-      <p className="text-sm text-gray-500">Audio Converter — web app scaffold</p>
+      <p className="text-callout text-text-secondary">Audio Converter — web app scaffold</p>
     </main>
   )
 }
