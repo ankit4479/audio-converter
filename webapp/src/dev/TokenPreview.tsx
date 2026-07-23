@@ -56,7 +56,9 @@ function Pane({ dark }: { dark: boolean }) {
       </section>
 
       <section className="space-y-1">
-        <p className="text-body-lg font-semibold text-text-primary">Drag songs or folders here</p>
+        <p className="text-body-lg font-semibold text-text-primary">
+          Drag songs or folders here
+        </p>
         <p className="text-callout text-text-secondary">
           MP3, FLAC, WAV, AAC, ALAC, Opus, and more.
         </p>

@@ -20,15 +20,15 @@ npm run dev
 
 ## Scripts
 
-| Command | Does |
-| --- | --- |
-| `npm run dev` | Local dev server with hot reload |
-| `npm run build` | Typecheck, then produce a static bundle in `dist/` |
-| `npm run preview` | Serve the production build locally |
-| `npm run test` | Run the unit test suite (Vitest) |
-| `npm run lint` | ESLint |
-| `npm run format` | Prettier, writes in place |
-| `npm run typecheck` | TypeScript, no emit |
+| Command             | Does                                               |
+| ------------------- | -------------------------------------------------- |
+| `npm run dev`       | Local dev server with hot reload                   |
+| `npm run build`     | Typecheck, then produce a static bundle in `dist/` |
+| `npm run preview`   | Serve the production build locally                 |
+| `npm run test`      | Run the unit test suite (Vitest)                   |
+| `npm run lint`      | ESLint                                             |
+| `npm run format`    | Prettier, writes in place                          |
+| `npm run typecheck` | TypeScript, no emit                                |
 
 ## Why cross-origin isolation
 
