@@ -1,0 +1,13 @@
+# Swift build artifacts
+.build/
+.swiftpm/
+DerivedData/
+
+# Bundled app and installer, produced by Scripts/build-app.sh and
+# Scripts/make-dmg.sh. Generated output, and the .dmg ships as a release asset
+# rather than living in the tree.
+build/
+*.app
+*.dmg
+
+.DS_Store
