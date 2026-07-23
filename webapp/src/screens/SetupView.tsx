@@ -271,29 +271,32 @@ function FormatPickerSection({
       <label htmlFor={selectId} className="text-body-sm font-semibold text-text-primary">
         Convert to
       </label>
-      <select
-        id={selectId}
-        className="w-full rounded-chip border border-border bg-surface p-2 text-text-primary"
-        value={settings.codec}
-        onChange={(e) =>
-          onSettingsChange({ ...settings, codec: e.target.value as CodecId })
-        }
-      >
-        <optgroup label="Common">
-          {commonCodecs.map((id) => (
-            <option key={id} value={id}>
-              {CODECS[id].label}
-            </option>
-          ))}
-        </optgroup>
-        <optgroup label="More Formats">
-          {moreCodecs.map((id) => (
-            <option key={id} value={id}>
-              {CODECS[id].label}
-            </option>
-          ))}
-        </optgroup>
-      </select>
+      <div className="relative">
+        <select
+          id={selectId}
+          className="w-full appearance-none rounded-chip border border-border bg-surface p-2 pr-9 text-text-primary"
+          value={settings.codec}
+          onChange={(e) =>
+            onSettingsChange({ ...settings, codec: e.target.value as CodecId })
+          }
+        >
+          <optgroup label="Common">
+            {commonCodecs.map((id) => (
+              <option key={id} value={id}>
+                {CODECS[id].label}
+              </option>
+            ))}
+          </optgroup>
+          <optgroup label="More Formats">
+            {moreCodecs.map((id) => (
+              <option key={id} value={id}>
+                {CODECS[id].label}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+        <SelectChevron />
+      </div>
       <p className="text-caption text-text-secondary">
         {codec.tagline} {capitalize(codec.approxSizePerMinute)}.
       </p>
@@ -405,19 +408,46 @@ function LabeledSelect<T extends string>({
       <label htmlFor={id} className="text-text-primary">
         {label}
       </label>
-      <select
-        id={id}
-        className="rounded-chip border border-border bg-surface px-2 py-1 text-text-primary"
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-      >
-        {options.map((option) => (
-          <option key={option} value={option}>
-            {optionLabel(option)}
-          </option>
-        ))}
-      </select>
+      <div className="relative">
+        <select
+          id={id}
+          className="appearance-none rounded-chip border border-border bg-surface py-1 pl-2 pr-7 text-text-primary"
+          value={value}
+          onChange={(e) => onChange(e.target.value as T)}
+        >
+          {options.map((option) => (
+            <option key={option} value={option}>
+              {optionLabel(option)}
+            </option>
+          ))}
+        </select>
+        <SelectChevron />
+      </div>
     </div>
+  )
+}
+
+// Native <select> arrows render however the browser's own UA styling decides to,
+// which doesn't line up with this design system - appearance-none above strips
+// that, and this SVG replaces it with one we control the size and alignment of.
+function SelectChevron() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary"
+      aria-hidden="true"
+    >
+      <path
+        d="M5 9l7 7 7-7"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   )
 }
 

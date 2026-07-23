@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { CodecId, CompressionTier, QualityTier, SampleRate } from './engine/codec'
 import { useFileIntake } from './intake/useFileIntake'
 import { ConvertView } from './screens/ConvertView'
+import { LandingPage } from './screens/LandingPage'
 import { SetupView, type SetupSettings } from './screens/SetupView'
 import { useConversion } from './screens/useConversion'
 
@@ -43,29 +44,29 @@ function App() {
     setScreen('setup')
   }
 
-  if (screen === 'convert' && conversion.scheduler && conversion.destination) {
-    return (
-      <ConvertView
-        scheduler={conversion.scheduler}
-        destination={conversion.destination}
-        codecLabel={conversion.codecLabel}
-        finalized={conversion.finalized}
-        onChange={handleChange}
-        onConvertMore={handleConvertMore}
-      />
-    )
-  }
-
   return (
-    <SetupView
-      store={store}
-      files={files}
-      totalDuration={totalDuration}
-      isCalculatingDuration={isCalculatingDuration}
-      settings={settings}
-      onSettingsChange={setSettings}
-      onConvert={handleConvert}
-    />
+    <LandingPage screen={screen}>
+      {screen === 'convert' && conversion.scheduler && conversion.destination ? (
+        <ConvertView
+          scheduler={conversion.scheduler}
+          destination={conversion.destination}
+          codecLabel={conversion.codecLabel}
+          finalized={conversion.finalized}
+          onChange={handleChange}
+          onConvertMore={handleConvertMore}
+        />
+      ) : (
+        <SetupView
+          store={store}
+          files={files}
+          totalDuration={totalDuration}
+          isCalculatingDuration={isCalculatingDuration}
+          settings={settings}
+          onSettingsChange={setSettings}
+          onConvert={handleConvert}
+        />
+      )}
+    </LandingPage>
   )
 }
 
