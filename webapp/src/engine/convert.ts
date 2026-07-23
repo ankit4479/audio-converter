@@ -178,10 +178,12 @@ export async function convertFile(
       sampleRate: SAMPLE_RATE_HZ[settings.sampleRate],
       bitrate: encodable.resolveBitrate?.(settings),
     },
-    // Metadata/cover art passthrough is issue #8's job; omitting `tags` here already
-    // makes Conversion default to copying the input's tags (including embedded
-    // images) to the output, so keepMetadata's "off" behavior is the only piece left
-    // for that issue to add.
+    // "On" (the default) needs nothing: omitting `tags` already makes Conversion copy
+    // the input's tags, including embedded cover art, byte-for-byte to the output.
+    // "Off" needs an explicit empty object - matching Codec.swift's `-map_metadata -1`,
+    // an empty tags object means no tags are written at all rather than falling back
+    // to copying.
+    tags: settings.keepMetadata ? undefined : {},
   })
 
   throwIfAborted(options.signal)

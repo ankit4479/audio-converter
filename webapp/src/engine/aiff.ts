@@ -7,8 +7,15 @@
  * endian WAV first and transforming it into AIFF - rather than reimplementing
  * decode logic, then rewrites the header and byte-swaps the sample data.
  *
- * Same PCM depth as WAV (16-bit), so there is no metadata story to preserve either:
- * Codec.swift's supportsEmbeddedArt is false for both wav and aiff.
+ * Known limitation (issue #8 is scoped to MP3->FLAC per its acceptance criteria, not
+ * AIFF): the intermediate WAV can carry basic text tags (Mediabunny copies them by
+ * default), but wavToAiff only ever reads 'fmt ' and 'data' chunks and silently drops
+ * everything else, so text tags never reach the AIFF output. Cover art was never in
+ * scope for AIFF either way - Codec.swift's supportsEmbeddedArt is false for it, same
+ * as WAV. Fixing the text-tag gap would mean hand-writing AIFF's own idiosyncratic
+ * metadata chunks (NAME/AUTH/ANNO), a second format-specific metadata writer for a
+ * secondary/legacy format - flagged here rather than silently expanding this issue's
+ * scope to build it.
  */
 import { CODECS } from './codec'
 import { ConversionError } from './convert'
