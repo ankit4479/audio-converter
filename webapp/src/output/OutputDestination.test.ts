@@ -36,6 +36,7 @@ describe('OutputDestination - directory mode', () => {
   it('writes each file straight to the chosen folder as write() is called', async () => {
     const written: string[] = []
     const fakeHandle = {
+      name: 'My Music',
       getDirectoryHandle: vi.fn(),
       getFileHandle: vi.fn(async (name: string) => ({
         createWritable: async () => ({
@@ -54,6 +55,33 @@ describe('OutputDestination - directory mode', () => {
     await destination!.write('b.flac', new Blob(['b']))
 
     expect(written).toEqual(['a.flac', 'b.flac'])
+  })
+
+  it("destinationLabel shows the chosen folder's name and the codec (ConvertView.swift:32)", async () => {
+    window.showDirectoryPicker = vi.fn().mockResolvedValue({ name: 'My Music' })
+    const destination = await OutputDestination.choose(2)
+    expect(destination!.destinationLabel('FLAC')).toBe('Saving to: My Music (FLAC)')
+  })
+
+  it('revealDestination reopens the native picker scoped to the destination folder', async () => {
+    const handle = { name: 'My Music' }
+    const picker = vi.fn().mockResolvedValue(handle)
+    window.showDirectoryPicker = picker
+    const destination = await OutputDestination.choose(2)
+
+    picker.mockClear()
+    await destination!.revealDestination()
+    expect(picker).toHaveBeenCalledWith({ startIn: handle })
+  })
+
+  it('revealDestination does not throw if the user dismisses the reopened picker', async () => {
+    const handle = { name: 'My Music' }
+    window.showDirectoryPicker = vi
+      .fn()
+      .mockResolvedValueOnce(handle)
+      .mockRejectedValueOnce(new DOMException('cancelled', 'AbortError'))
+    const destination = await OutputDestination.choose(2)
+    await expect(destination!.revealDestination()).resolves.toBeUndefined()
   })
 
   it('returns null if the user cancels the folder picker', async () => {
@@ -85,6 +113,27 @@ describe('OutputDestination - single-download mode', () => {
     await destination!.finish()
     expect(clickSpy).toHaveBeenCalledTimes(1)
     expect(createUrl).toHaveBeenCalled()
+
+    createUrl.mockRestore()
+    clickSpy.mockRestore()
+  })
+
+  it('destinationLabel says the file downloads directly, with no folder path', async () => {
+    const destination = await OutputDestination.choose(1)
+    expect(destination!.destinationLabel('MP3')).toBe('Downloading directly (MP3)')
+  })
+
+  it('revealDestination re-triggers the same download after finish()', async () => {
+    const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake')
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click')
+
+    const destination = await OutputDestination.choose(1)
+    await destination!.write('song.flac', new Blob(['x']))
+    await destination!.finish()
+
+    clickSpy.mockClear()
+    await destination!.revealDestination()
+    expect(clickSpy).toHaveBeenCalledTimes(1)
 
     createUrl.mockRestore()
     clickSpy.mockRestore()
@@ -121,6 +170,28 @@ describe('OutputDestination - zip mode', () => {
     expect(createUrl).toHaveBeenCalled()
     const [blobArg] = createUrl.mock.calls[0]
     expect((blobArg as Blob).size).toBeGreaterThan(0)
+
+    createUrl.mockRestore()
+    clickSpy.mockRestore()
+  })
+
+  it('destinationLabel says the files download as one zip, with no folder path', async () => {
+    const destination = await OutputDestination.choose(2)
+    expect(destination!.destinationLabel('WAV')).toBe('Downloading as one zip (WAV)')
+  })
+
+  it('revealDestination re-triggers the zip download after finish()', async () => {
+    const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake-zip')
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click')
+
+    const destination = await OutputDestination.choose(2)
+    await destination!.write('a.flac', new Blob(['a']))
+    await destination!.write('b.flac', new Blob(['b']))
+    await destination!.finish()
+
+    clickSpy.mockClear()
+    await destination!.revealDestination()
+    expect(clickSpy).toHaveBeenCalledTimes(1)
 
     createUrl.mockRestore()
     clickSpy.mockRestore()

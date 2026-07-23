@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import type { CodecId, CompressionTier, QualityTier, SampleRate } from './engine/codec'
 import { useFileIntake } from './intake/useFileIntake'
+import { ConvertView } from './screens/ConvertView'
 import { SetupView, type SetupSettings } from './screens/SetupView'
+import { useConversion } from './screens/useConversion'
 
 // Defaults match AppState.swift:16-20 exactly.
 const DEFAULT_SETTINGS: SetupSettings = {
@@ -16,17 +18,41 @@ function App() {
   const { store, files, totalDuration, isCalculatingDuration } = useFileIntake()
   const [settings, setSettings] = useState<SetupSettings>(DEFAULT_SETTINGS)
   const [screen, setScreen] = useState<'setup' | 'convert'>('setup')
+  const conversion = useConversion()
 
-  if (screen === 'convert') {
-    // The real Convert screen lands in issue #15, built on top of the output
-    // handling (#10) and batch scheduler (#11) landing right after this one.
+  // AppState.chooseDestinationAndConvert: prompts for a destination, then starts
+  // the batch. Stays on setup if the user cancels the destination picker.
+  const handleConvert = () => {
+    void (async () => {
+      const started = await conversion.controller.start(files, settings)
+      if (started) setScreen('convert')
+    })()
+  }
+
+  // AppState.cancelAndReturnToSetup: stop in-flight work, keep the file list.
+  const handleChange = () => {
+    conversion.controller.cancel()
+    setScreen('setup')
+  }
+
+  // AppState.convertMore: drop this run's state and the file list, back to a
+  // fresh setup screen.
+  const handleConvertMore = () => {
+    conversion.controller.reset()
+    store.clear()
+    setScreen('setup')
+  }
+
+  if (screen === 'convert' && conversion.scheduler && conversion.destination) {
     return (
-      <main className="mx-auto max-w-[680px] p-6">
-        <p className="text-callout text-text-secondary">
-          Converting {files.length} song{files.length === 1 ? '' : 's'} to{' '}
-          {settings.codec}… (Convert screen: issue #15)
-        </p>
-      </main>
+      <ConvertView
+        scheduler={conversion.scheduler}
+        destination={conversion.destination}
+        codecLabel={conversion.codecLabel}
+        finalized={conversion.finalized}
+        onChange={handleChange}
+        onConvertMore={handleConvertMore}
+      />
     )
   }
 
@@ -38,7 +64,7 @@ function App() {
       isCalculatingDuration={isCalculatingDuration}
       settings={settings}
       onSettingsChange={setSettings}
-      onConvert={() => setScreen('convert')}
+      onConvert={handleConvert}
     />
   )
 }

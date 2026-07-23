@@ -41,6 +41,7 @@ export class OutputDestination {
   private readonly zipQueue: StreamingQueue<ZipEntry> | null
   private readonly zipDone: Promise<void> | null
   private singleEntry: ZipEntry | null = null
+  private lastDownload: { blob: Blob; fileName: string } | null = null
 
   private constructor(
     mode: OutputMode,
@@ -55,6 +56,7 @@ export class OutputDestination {
       this.zipQueue = zipQueue
       this.zipDone = buildZip(zipQueue)
         .then((blob) => {
+          this.lastDownload = { blob, fileName: this.zipFileName }
           triggerDownload(blob, this.zipFileName)
         })
         .catch((error: unknown) => {
@@ -92,6 +94,19 @@ export class OutputDestination {
     return new OutputDestination(mode, zipFileName)
   }
 
+  /** The folder chip's "Saving to: X (Format)" line for directory mode, or the
+   *  zip-fallback browsers' download-mode equivalent (issue #15's folderChip,
+   *  ConvertView.swift:32) - a browser can only ever show the chosen folder's own
+   *  name, never a full filesystem path, since the File System Access API doesn't
+   *  expose one. */
+  destinationLabel(codecLabel: string): string {
+    if (this.mode === 'directory') {
+      return `Saving to: ${this.directoryHandle?.name ?? ''} (${codecLabel})`
+    }
+    if (this.mode === 'zip') return `Downloading as one zip (${codecLabel})`
+    return `Downloading directly (${codecLabel})`
+  }
+
   async write(relativePath: string, blob: Blob): Promise<void> {
     if (this.mode === 'directory') {
       await writeToDirectory(this.directoryHandle!, relativePath, blob)
@@ -110,10 +125,35 @@ export class OutputDestination {
       this.zipQueue!.close()
       await this.zipDone
     } else if (this.mode === 'single-download' && this.singleEntry) {
-      triggerDownload(
-        this.singleEntry.blob,
-        fileNameFromPath(this.singleEntry.relativePath),
-      )
+      this.lastDownload = {
+        blob: this.singleEntry.blob,
+        fileName: fileNameFromPath(this.singleEntry.relativePath),
+      }
+      triggerDownload(this.lastDownload.blob, this.lastDownload.fileName)
     }
+  }
+
+  /**
+   * The done card's primary action (issue #15's "Show in Finder" replacement -
+   * there's no browser API to open Finder, so each mode does the closest useful
+   * thing instead). Zip/single-download modes just re-trigger the same download;
+   * directory mode re-opens the native folder picker already scoped to the
+   * destination (`startIn`), the closest a browser gets to letting someone visually
+   * confirm where the batch landed. Best-effort: a user dismissing that picker, or
+   * a browser that doesn't support `startIn`, is not an error worth surfacing here.
+   */
+  async revealDestination(): Promise<void> {
+    if (this.mode === 'directory') {
+      if (!this.directoryHandle || !window.showDirectoryPicker) return
+      try {
+        await window.showDirectoryPicker({ startIn: this.directoryHandle })
+      } catch {
+        // User dismissed the picker, or this browser ignores startIn - either way
+        // there's nothing actionable to do about it.
+      }
+      return
+    }
+    if (this.lastDownload)
+      triggerDownload(this.lastDownload.blob, this.lastDownload.fileName)
   }
 }

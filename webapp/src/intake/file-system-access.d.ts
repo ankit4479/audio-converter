@@ -10,5 +10,9 @@ interface Window {
   showDirectoryPicker?: (options?: {
     id?: string
     mode?: 'read' | 'readwrite'
+    /** Opens the native picker already scoped to this folder - the closest browsers
+     *  get to letting a user visually confirm where a batch landed (issue #15's
+     *  "Show in Finder" replacement, since no API can literally open Finder). */
+    startIn?: FileSystemDirectoryHandle
   }) => Promise<FileSystemDirectoryHandle>
 }
