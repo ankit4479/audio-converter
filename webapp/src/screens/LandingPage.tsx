@@ -89,17 +89,17 @@ function SiteHeader() {
 
 function Hero({ onStart }: { onStart: () => void }) {
   return (
-    <div className="mx-auto flex min-h-[75vh] max-w-[760px] flex-col items-center justify-center px-6 py-16 text-center">
-      <h1 className="text-4xl font-bold tracking-tight text-text-primary sm:text-5xl">
+    <div className="mx-auto max-w-[760px] px-6 pb-8 pt-12 text-center">
+      <h1 className="text-3xl font-bold tracking-tight text-text-primary sm:text-4xl">
         Your audio never leaves your device
       </h1>
-      <p className="mx-auto mt-4 max-w-[480px] text-lg text-text-secondary">
+      <p className="mx-auto mt-3 max-w-[480px] text-body-lg text-text-secondary">
         Drop in a file, pick a format, get it back. No account, no upload, no catch.
       </p>
-      <Button size="lg" className="mt-8" onClick={onStart}>
+      <Button size="lg" className="mt-6" onClick={onStart}>
         Start converting
       </Button>
-      <div className="mt-16">
+      <div className="mt-8">
         <ConversionDemo />
       </div>
     </div>
@@ -123,16 +123,16 @@ const PRIVACY_POINTS = [
 
 function PrivacySection() {
   return (
-    <div className="mx-auto max-w-[760px] px-6 py-16">
-      <h2 className="text-center text-2xl font-semibold text-text-primary">
+    <div className="mx-auto max-w-[760px] px-6 py-6">
+      <h2 className="text-center text-xl font-semibold text-text-primary">
         Built around one rule: your files stay yours
       </h2>
-      <div className="mt-8 grid gap-4 sm:grid-cols-3">
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
         {PRIVACY_POINTS.map((point) => (
-          <Card key={point.title}>
+          <Card key={point.title} size="sm">
             <CardContent>
               <h3 className="font-semibold text-text-primary">{point.title}</h3>
-              <p className="mt-2 text-callout text-text-secondary">{point.body}</p>
+              <p className="mt-1 text-callout text-text-secondary">{point.body}</p>
             </CardContent>
           </Card>
         ))}
@@ -149,17 +149,17 @@ const STEPS = [
 
 function HowItWorksSection() {
   return (
-    <div className="mx-auto max-w-[760px] px-6 pb-16">
-      <h2 className="text-center text-2xl font-semibold text-text-primary">
+    <div className="mx-auto max-w-[760px] px-6 pb-6">
+      <h2 className="text-center text-xl font-semibold text-text-primary">
         How it works
       </h2>
-      <ol className="mt-8 grid gap-6 sm:grid-cols-3">
+      <ol className="mt-4 grid gap-4 sm:grid-cols-3">
         {STEPS.map((step, i) => (
           <li key={step.title} className="text-center">
-            <div className="mx-auto flex h-8 w-8 items-center justify-center rounded-full bg-accent text-body-sm font-semibold text-accent-ink">
+            <div className="mx-auto flex h-7 w-7 items-center justify-center rounded-full bg-accent text-body-sm font-semibold text-accent-ink">
               {i + 1}
             </div>
-            <h3 className="mt-3 font-semibold text-text-primary">{step.title}</h3>
+            <h3 className="mt-2 font-semibold text-text-primary">{step.title}</h3>
             <p className="mt-1 text-callout text-text-secondary">{step.body}</p>
           </li>
         ))}
@@ -170,7 +170,7 @@ function HowItWorksSection() {
 
 function SiteFooter() {
   return (
-    <footer className="border-t border-border py-8 text-center text-caption text-text-secondary">
+    <footer className="border-t border-border py-4 text-center text-caption text-text-secondary">
       Free and open source.{' '}
       <a href={GITHUB_URL} target="_blank" rel="noreferrer" className="underline">
         View the code
