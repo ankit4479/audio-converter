@@ -8,11 +8,6 @@
  * saved filename instead.
  *
  * `null` means "not implemented yet":
- *  - AAC/Opus/FLAC (#6): straightforward `bitrate: number` for AAC/Opus (parse
- *    aacBitrate()/opusBitrate()'s "256k" strings into bps), but Mediabunny's
- *    ConversionAudioOptions has no compression-level knob at all, so FLAC's
- *    balanced/fast/smallest tiers (Codec.swift's -compression_level) may have no
- *    browser equivalent — needs confirming against Mediabunny's FLAC encoder options.
  *  - AIFF (#7): no Mediabunny OutputFormat exists for AIFF at all (its format list is
  *    MP4/MOV/WebM/MKV/HLS/WAVE/MP3/Ogg/ADTS/FLAC/MPEG-TS) — needs a hand-written writer
  *    reading decoded PCM directly, bypassing this table entirely.
@@ -21,22 +16,45 @@
  *  - ALAC/WavPack/WMA: no Mediabunny encoder exists (its AudioCodec union has no such
  *    values) — permanently null, see issue #13.
  */
-import { Mp3OutputFormat, WavOutputFormat } from 'mediabunny'
+import {
+  FlacOutputFormat,
+  Mp3OutputFormat,
+  Mp4OutputFormat,
+  OggOutputFormat,
+  WavOutputFormat,
+} from 'mediabunny'
 import type { AudioCodec } from 'mediabunny'
-import { CODECS, type CodecId, type ConversionSettings } from './codec'
+import {
+  aacBitrate,
+  CODECS,
+  opusBitrate,
+  type CodecId,
+  type ConversionSettings,
+} from './codec'
+import { ensureFlacEncoderRegistered } from './flac'
 import { ensureMp3EncoderRegistered, mp3BitrateForQuality } from './mp3'
+import { ensureWebCodecsSupport, kbpsStringToBps } from './webcodecs'
 
 export interface EncodableFormat {
   /** Builds a fresh OutputFormat instance. A factory, not a shared instance, since
    *  Output takes ownership of the format instance it's constructed with. */
-  createFormat: () => InstanceType<typeof WavOutputFormat | typeof Mp3OutputFormat>
+  createFormat: () => InstanceType<
+    | typeof WavOutputFormat
+    | typeof Mp3OutputFormat
+    | typeof Mp4OutputFormat
+    | typeof OggOutputFormat
+    | typeof FlacOutputFormat
+  >
   audioCodec: AudioCodec
   mimeType: string
-  /** undefined when the codec has no bitrate concept at all (WAV). */
+  /** undefined when the codec has no bitrate concept at all (WAV, FLAC). */
   resolveBitrate?: (settings: ConversionSettings) => number
   /** Called once before the first conversion that needs this format. Used to lazily
    *  load a WASM encoder only when it's actually needed (issue #5's acceptance
-   *  criterion: the MP3 WASM chunk must be absent from the initial page load). */
+   *  criterion: the MP3 WASM chunk must be absent from the initial page load), and/or
+   *  to fail fast with a typed error when this browser can't encode the codec at all
+   *  (issue #6: AAC/Opus have no WASM fallback, so an unsupported browser must be
+   *  told clearly rather than attempting and failing deep inside Conversion.init). */
   ensureReady?: () => Promise<void>
 }
 
@@ -54,9 +72,36 @@ export const ENCODABLE_FORMATS: Readonly<Record<CodecId, EncodableFormat | null>
     resolveBitrate: (settings) => mp3BitrateForQuality(settings.quality),
     ensureReady: ensureMp3EncoderRegistered,
   },
-  aac: null,
-  flac: null,
-  opus: null,
+  aac: {
+    createFormat: () => new Mp4OutputFormat(),
+    audioCodec: 'aac',
+    mimeType: 'audio/mp4',
+    resolveBitrate: (settings) => kbpsStringToBps(aacBitrate(settings.quality)),
+    ensureReady: () => ensureWebCodecsSupport('aac', 'AAC'),
+  },
+  opus: {
+    createFormat: () => new OggOutputFormat(),
+    audioCodec: 'opus',
+    // Ogg Opus's registered MIME type, distinct from plain Ogg (matches the Mac app's
+    // own convention of giving Opus a .opus extension rather than .ogg for the same
+    // underlying Ogg container - see Codec.fileExtension).
+    mimeType: 'audio/opus',
+    resolveBitrate: (settings) => kbpsStringToBps(opusBitrate(settings.quality)),
+    ensureReady: () => ensureWebCodecsSupport('opus', 'Opus'),
+    // No explicit VBR toggle is reachable through Mediabunny's high-level Conversion
+    // API (ConversionAudioOptions has no bitrateMode field), but the WebCodecs spec's
+    // own default for AudioEncoderConfig.bitrateMode is 'variable' - Opus is VBR here
+    // simply by not overriding that default, matching the issue's "-vbr on" ask.
+  },
+  flac: {
+    createFormat: () => new FlacOutputFormat(),
+    audioCodec: 'flac',
+    mimeType: 'audio/flac',
+    // No resolveBitrate: lossless, no bitrate concept, same as WAV. No compression
+    // level either - see flac.ts's header comment for why that's a real, confirmed
+    // gap rather than an oversight.
+    ensureReady: ensureFlacEncoderRegistered,
+  },
   aiff: null,
   alac: null,
   wavpack: null,

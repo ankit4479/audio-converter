@@ -161,9 +161,15 @@ describe('CODECS', () => {
     expect(CODECS.vorbis.availability).toBe('unsupportedInBrowser')
   })
 
-  it('marks MP3, AAC, FLAC, WAV, AIFF, and Opus supported', () => {
-    for (const id of ['mp3', 'aac', 'flac', 'wav', 'aiff', 'opus'] as const) {
+  it('marks MP3, FLAC, WAV, and AIFF supported (native or a bundled WASM fallback works regardless of browser)', () => {
+    for (const id of ['mp3', 'flac', 'wav', 'aiff'] as const) {
       expect(CODECS[id].availability).toBe('supported')
+    }
+  })
+
+  it('marks AAC and Opus runtimeDetected (issue #6: no WASM fallback exists for either, so real availability depends on the browser)', () => {
+    for (const id of ['aac', 'opus'] as const) {
+      expect(CODECS[id].availability).toBe('runtimeDetected')
     }
   })
 })

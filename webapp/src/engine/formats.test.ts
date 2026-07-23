@@ -3,14 +3,24 @@ import { CODEC_IDS } from './codec'
 import { ENCODABLE_FORMATS, encodableFormatFor, outputFileName } from './formats'
 
 describe('ENCODABLE_FORMATS', () => {
-  it('WAV (#4) and MP3 (#5) are wired up - everything else is explicitly not-yet-implemented', () => {
-    const implemented = CODEC_IDS.filter((id) => ENCODABLE_FORMATS[id] !== null)
-    expect(implemented).toEqual(['mp3', 'wav'])
+  it('WAV/MP3/AAC/Opus/FLAC are wired up - AIFF/ALAC/WavPack/Vorbis/WMA are explicitly not-yet-implemented', () => {
+    const implemented = new Set(CODEC_IDS.filter((id) => ENCODABLE_FORMATS[id] !== null))
+    expect(implemented).toEqual(new Set(['mp3', 'aac', 'flac', 'opus', 'wav']))
   })
 
-  it('WAV has no bitrate concept; MP3 always resolves one', () => {
+  it('WAV and FLAC have no bitrate concept; MP3/AAC/Opus always resolve one', () => {
     expect(ENCODABLE_FORMATS.wav?.resolveBitrate).toBeUndefined()
+    expect(ENCODABLE_FORMATS.flac?.resolveBitrate).toBeUndefined()
     expect(ENCODABLE_FORMATS.mp3?.resolveBitrate).toBeTypeOf('function')
+    expect(ENCODABLE_FORMATS.aac?.resolveBitrate).toBeTypeOf('function')
+    expect(ENCODABLE_FORMATS.opus?.resolveBitrate).toBeTypeOf('function')
+  })
+
+  it('AAC and Opus gate on browser support via ensureReady; FLAC and MP3 always register a WASM fallback', () => {
+    for (const id of ['mp3', 'aac', 'opus', 'flac'] as const) {
+      expect(ENCODABLE_FORMATS[id]?.ensureReady).toBeTypeOf('function')
+    }
+    expect(ENCODABLE_FORMATS.wav?.ensureReady).toBeUndefined()
   })
 
   it('has an entry (implemented or null) for every codec, none missing', () => {

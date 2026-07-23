@@ -24,7 +24,12 @@ import { SAMPLE_RATE_HZ, type ConversionSettings } from './codec'
 import { encodableFormatFor, outputFileName } from './formats'
 
 export type ConversionErrorReason =
-  'no-audio-track' | 'not-implemented' | 'unreadable' | 'canceled' | 'unknown'
+  | 'no-audio-track'
+  | 'not-implemented'
+  | 'unsupported-in-browser'
+  | 'unreadable'
+  | 'canceled'
+  | 'unknown'
 
 /**
  * Comlink's built-in thrown-error handling (comlink.js's throwTransferHandler) only

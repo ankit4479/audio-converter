@@ -118,7 +118,10 @@ export const CODECS: Readonly<Record<CodecId, CodecDefinition>> = {
     fileExtension: 'm4a',
     supportsCompressionLevel: false,
     supportsEmbeddedArt: true,
-    availability: 'supported',
+    // Issue #6: no bundled WASM fallback (unlike MP3/FLAC) - Chrome supports native
+    // WebCodecs AAC encode, but cross-browser support genuinely varies, so this can
+    // only be known via canEncodeAudio() at runtime, not assigned statically.
+    availability: 'runtimeDetected',
   },
   alac: {
     label: 'Apple Lossless (ALAC)',
@@ -166,7 +169,10 @@ export const CODECS: Readonly<Record<CodecId, CodecDefinition>> = {
     fileExtension: 'opus',
     supportsCompressionLevel: false,
     supportsEmbeddedArt: false,
-    availability: 'supported',
+    // Issue #6: no WASM fallback exists (Mediabunny doesn't ship one, unlike MP3/
+    // FLAC) and cross-browser WebCodecs Opus support isn't universal, so this is
+    // only known via canEncodeAudio() at runtime.
+    availability: 'runtimeDetected',
   },
   aiff: {
     label: 'AIFF',

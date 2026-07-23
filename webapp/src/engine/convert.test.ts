@@ -1,4 +1,10 @@
-import { ALL_FORMATS, BlobSource, Input } from 'mediabunny'
+import {
+  ALL_FORMATS,
+  BlobSource,
+  canDecodeAudio,
+  canEncodeAudio,
+  Input,
+} from 'mediabunny'
 import { describe, expect, it, vi } from 'vitest'
 import { CODEC_IDS, type ConversionSettings } from './codec'
 import {
@@ -7,6 +13,17 @@ import {
   decodeConversionError,
   isEncodedConversionError,
 } from './convert'
+
+// AAC/Opus have no WASM fallback (formats.ts) - encoding them for real requires an
+// actual browser's WebCodecs AudioEncoder, which this test environment (vitest/jsdom)
+// doesn't implement. FLAC's *encoder* is a WASM fallback and works here, but its
+// *decoder* isn't (no @mediabunny/flac-decoder package exists), so the round-trip
+// test needs real decode support too. Gated on the real capability check rather than
+// skipped unconditionally, so these tests run for real wherever that capability
+// exists (a real browser), and skip visibly (not silently) elsewhere.
+const canEncodeAac = await canEncodeAudio('aac')
+const canEncodeOpus = await canEncodeAudio('opus')
+const canDecodeFlac = await canDecodeAudio('flac')
 
 /**
  * A minimal valid 16-bit PCM WAV file: RIFF/WAVE/fmt /data chunks, no extra metadata.
@@ -51,7 +68,8 @@ const BASE_SETTINGS: ConversionSettings = {
 }
 
 describe('convertFile - not-implemented codecs', () => {
-  it.each(CODEC_IDS.filter((id) => id !== 'wav' && id !== 'mp3'))(
+  const IMPLEMENTED_CODECS = new Set(['wav', 'mp3', 'aac', 'opus', 'flac'])
+  it.each(CODEC_IDS.filter((id) => !IMPLEMENTED_CODECS.has(id)))(
     'rejects %s with reason not-implemented, without touching the file at all',
     async (codec) => {
       // A garbage file that would fail as "unreadable" if convertFile got far enough
@@ -240,4 +258,147 @@ describe('convertFile - MP3 end to end', () => {
     expect(sizes.best).toBeGreaterThan(sizes.good)
     expect(sizes.good).toBeGreaterThan(sizes.small)
   })
+})
+
+describe('convertFile - AAC end to end', () => {
+  it.skipIf(!canEncodeAac)('produces a valid, playable AAC (m4a) file', async () => {
+    const result = await convertFile(makeWav(44100 * 2, 44100), 'test', {
+      ...BASE_SETTINGS,
+      codec: 'aac',
+    })
+    expect(result.fileName).toBe('test.m4a')
+    expect(result.blob.type).toBe('audio/mp4')
+
+    const reread = new Input({
+      source: new BlobSource(result.blob),
+      formats: ALL_FORMATS,
+    })
+    expect(await reread.canRead()).toBe(true)
+    const track = await reread.getPrimaryAudioTrack()
+    expect(track!.codec).toBe('aac')
+    expect(await reread.computeDuration()).toBeCloseTo(2, 0)
+  })
+
+  it.skipIf(!canEncodeAac)('honours the 256k/192k/128k bitrate tiers', async () => {
+    const { averageBitrate } = await (async () => {
+      const result = await convertFile(makeWav(44100 * 2, 44100), 'test', {
+        ...BASE_SETTINGS,
+        codec: 'aac',
+        quality: 'good',
+      })
+      const reread = new Input({
+        source: new BlobSource(result.blob),
+        formats: ALL_FORMATS,
+      })
+      const track = await reread.getPrimaryAudioTrack()
+      return track!.computePacketStats()
+    })()
+    expect(averageBitrate).toBeGreaterThan(192_000 * 0.8)
+    expect(averageBitrate).toBeLessThan(192_000 * 1.2)
+  })
+
+  it('reports unsupported-in-browser instead of an opaque failure when AAC is unavailable', async () => {
+    if (canEncodeAac) return // nothing to assert - this browser genuinely supports it
+    const error = await convertFile(makeWav(4000), 'x', {
+      ...BASE_SETTINGS,
+      codec: 'aac',
+    }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ConversionError)
+    expect((error as ConversionError).reason).toBe('unsupported-in-browser')
+  })
+})
+
+describe('convertFile - Opus end to end', () => {
+  it.skipIf(!canEncodeOpus)(
+    'produces a valid, playable Opus file in an Ogg container',
+    async () => {
+      const result = await convertFile(makeWav(44100 * 2, 44100), 'test', {
+        ...BASE_SETTINGS,
+        codec: 'opus',
+      })
+      expect(result.fileName).toBe('test.opus')
+      expect(result.blob.type).toBe('audio/opus')
+
+      const reread = new Input({
+        source: new BlobSource(result.blob),
+        formats: ALL_FORMATS,
+      })
+      expect(await reread.canRead()).toBe(true)
+      const track = await reread.getPrimaryAudioTrack()
+      expect(track!.codec).toBe('opus')
+      expect(await reread.computeDuration()).toBeCloseTo(2, 0)
+    },
+  )
+
+  it('reports unsupported-in-browser instead of an opaque failure when Opus is unavailable', async () => {
+    if (canEncodeOpus) return
+    const error = await convertFile(makeWav(4000), 'x', {
+      ...BASE_SETTINGS,
+      codec: 'opus',
+    }).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ConversionError)
+    expect((error as ConversionError).reason).toBe('unsupported-in-browser')
+  })
+})
+
+describe('convertFile - FLAC end to end', () => {
+  it('produces a valid FLAC file with matching duration, sample rate, and channels', async () => {
+    const result = await convertFile(makeWav(44100 * 2, 44100), 'test', {
+      ...BASE_SETTINGS,
+      codec: 'flac',
+    })
+    expect(result.fileName).toBe('test.flac')
+    expect(result.blob.type).toBe('audio/flac')
+
+    const reread = new Input({
+      source: new BlobSource(result.blob),
+      formats: ALL_FORMATS,
+    })
+    expect(await reread.canRead()).toBe(true)
+    const track = await reread.getPrimaryAudioTrack()
+    expect(track!.codec).toBe('flac')
+    expect(await reread.computeDuration()).toBeCloseTo(2, 0)
+  })
+
+  it.skipIf(!canDecodeFlac)(
+    'decodes back to PCM identical to the source (lossless round trip)',
+    async () => {
+      const sourceWav = makeWav(44100, 44100)
+      const sourcePcm = new Uint8Array(await sourceWav.arrayBuffer()).slice(44)
+
+      const flacResult = await convertFile(sourceWav, 'x', {
+        ...BASE_SETTINGS,
+        codec: 'flac',
+      })
+      const wavBack = await convertFile(flacResult.blob, 'y', {
+        ...BASE_SETTINGS,
+        codec: 'wav',
+      })
+      const roundTrippedPcm = new Uint8Array(await wavBack.blob.arrayBuffer()).slice(44)
+
+      expect(roundTrippedPcm).toEqual(sourcePcm)
+    },
+  )
+
+  it(
+    'documents a real, confirmed gap: the three compression tiers currently produce ' +
+      "IDENTICAL output, since neither Mediabunny's ConversionAudioOptions nor " +
+      "@mediabunny/flac-encoder's worker protocol expose any compression-level knob " +
+      '(see flac.ts). This is not the acceptance criterion the issue asked for - it is ' +
+      'a regression marker: if this ever starts failing, a knob has become available ' +
+      'and issue #6 should be revisited to actually use it.',
+    async () => {
+      const sizes: number[] = []
+      for (const compression of ['balanced', 'fast', 'smallest'] as const) {
+        const result = await convertFile(makeWav(44100 * 2, 44100), 'test', {
+          ...BASE_SETTINGS,
+          codec: 'flac',
+          compression,
+        })
+        sizes.push(result.blob.size)
+      }
+      expect(sizes[0]).toBe(sizes[1])
+      expect(sizes[1]).toBe(sizes[2])
+    },
+  )
 })
