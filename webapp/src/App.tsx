@@ -13,11 +13,16 @@ import { useConversion } from './screens/useConversion'
 // index.ts's DEFAULT_SETTINGS.
 const audioModule = requireModule('audio')
 
-function App() {
+// initialSettings: conversion-specific routes (e.g. /wav-to-mp3, see
+// routes/conversion.tsx) preselect the target codec so the widget opens ready
+// to produce that format, without needing any new UI (#25) - full "convert to"
+// switching between modules is #29's job.
+function App({ initialSettings }: { initialSettings?: Partial<SetupSettings> } = {}) {
   const { store, files, totalDuration, isCalculatingDuration } = useFileIntake()
-  const [settings, setSettings] = useState<SetupSettings>(
-    audioModule.defaultSettings as SetupSettings,
-  )
+  const [settings, setSettings] = useState<SetupSettings>({
+    ...(audioModule.defaultSettings as SetupSettings),
+    ...initialSettings,
+  })
   const [screen, setScreen] = useState<'setup' | 'convert'>('setup')
   const conversion = useConversion()
 

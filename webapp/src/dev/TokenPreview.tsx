@@ -3,7 +3,7 @@
 // against a screenshot of the macOS app. Not part of the shipped app flow — the
 // real app only ever follows the OS via prefers-color-scheme (see tokens.css);
 // the dark pane here uses the .force-dark override that exists solely for this
-// page. Reachable at /?tokens while developing (see main.tsx).
+// page. Reachable at /?tokens while developing (see entry.client.tsx).
 
 function Swatch({ label, className }: { label: string; className: string }) {
   return (

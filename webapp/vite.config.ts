@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { reactRouter } from '@react-router/dev/vite'
 import tailwindcss from '@tailwindcss/vite'
 
 // Cross-origin isolation is required for multi-threaded WASM (SharedArrayBuffer).
@@ -12,7 +12,7 @@ const crossOriginIsolationHeaders = {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [reactRouter(), tailwindcss()],
   // Only for src/components/ui (shadcn/ui, the landing page's component library) -
   // shadcn's own CLI generates imports through this alias, and the rest of the app
   // keeps using its existing relative imports rather than adopting it everywhere.
