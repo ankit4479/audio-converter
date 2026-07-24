@@ -11,3 +11,5 @@ build/
 *.dmg
 
 .DS_Store
+.vercel
+.env*
