@@ -58,7 +58,9 @@ const AUDIO_FORMAT_NODES: readonly FormatNode[] = CODEC_IDS.map((id) => ({
 // alac/wavpack/vorbis/wma remain unimplemented (see formats.ts, codec.ts's
 // 'unsupportedInBrowser' availability) and are deliberately excluded as `to`
 // targets, though they still exist as FormatNodes above (e.g. as a `from` label).
-const AUDIO_ENCODABLE_TARGETS: readonly CodecId[] = CODEC_IDS.filter(
+// Exported so modules/audio (#23) can build its outputFormats from the same
+// source of truth rather than re-deriving this filter a second time.
+export const AUDIO_ENCODABLE_TARGETS: readonly CodecId[] = CODEC_IDS.filter(
   (id) => id === 'aiff' || ENCODABLE_FORMATS[id] !== null,
 )
 
