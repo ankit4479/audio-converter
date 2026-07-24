@@ -31,6 +31,16 @@ export function get(id: string): ConverterModule<unknown> | undefined {
   return MODULES.get(id)
 }
 
+/** Same as get(), but throws instead of returning undefined - for the several
+ *  call sites (E0.4, issue #24) that only run once the shell has already
+ *  guaranteed every built-in module is registered, and would otherwise each
+ *  repeat their own "not registered" guard. */
+export function requireModule(id: string): ConverterModule<unknown> {
+  const module = get(id)
+  if (!module) throw new Error(`The "${id}" module is not registered.`)
+  return module
+}
+
 export function all(): readonly ConverterModule<unknown>[] {
   return [...MODULES.values()]
 }

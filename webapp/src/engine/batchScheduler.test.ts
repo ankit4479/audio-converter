@@ -349,3 +349,48 @@ describe('BatchScheduler - empty batch', () => {
     expect(scheduler.isFinished).toBe(false)
   })
 })
+
+// E0.4 (issue #24): with no createConverter override (the production path),
+// the scheduler must reach the engine through the registered module rather
+// than constructing engine/converter.ts's Converter itself.
+describe('BatchScheduler - default converter factory', () => {
+  it("spawns engines via the registered audio module's loadEngine(), not a hardcoded Converter", async () => {
+    const { register, _resetForTests } = await import('../platform/registry')
+    _resetForTests()
+
+    const fakeEngine = {
+      convert: vi.fn(async () => ({ blob: new Blob(['x']), fileName: 'a.flac' })),
+      dispose: vi.fn(),
+    }
+    const loadEngine = vi.fn(async () => fakeEngine)
+    register({
+      id: 'audio',
+      category: 'audio' as const,
+      label: 'Audio',
+      accepts: () => true,
+      inputFormats: [],
+      outputFormats: [],
+      settingsSchema: [],
+      defaultSettings: SETTINGS,
+      probe: async () => ({ supported: true }),
+      loadEngine,
+    })
+
+    try {
+      const scheduler = new BatchScheduler({ concurrency: 1 })
+      await scheduler.run([audioFile('a.wav')], SETTINGS)
+
+      expect(loadEngine).toHaveBeenCalledTimes(1)
+      expect(fakeEngine.convert).toHaveBeenCalledWith(
+        expect.any(File),
+        'a',
+        SETTINGS,
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      )
+      expect(fakeEngine.dispose).toHaveBeenCalledTimes(1)
+      expect(scheduler.completedCount).toBe(1)
+    } finally {
+      _resetForTests()
+    }
+  })
+})

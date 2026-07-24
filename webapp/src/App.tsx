@@ -1,23 +1,23 @@
 import { useState } from 'react'
-import type { CodecId, CompressionTier, QualityTier, SampleRate } from './engine/codec'
+import './modules/register'
+import { requireModule } from './platform/registry'
 import { useFileIntake } from './intake/useFileIntake'
 import { ConvertView } from './screens/ConvertView'
 import { LandingPage } from './screens/LandingPage'
 import { SetupView, type SetupSettings } from './screens/SetupView'
 import { useConversion } from './screens/useConversion'
 
-// Defaults match AppState.swift:16-20 exactly.
-const DEFAULT_SETTINGS: SetupSettings = {
-  codec: 'flac' as CodecId,
-  quality: 'best' as QualityTier,
-  compression: 'balanced' as CompressionTier,
-  sampleRate: 'keepOriginal' as SampleRate,
-  keepMetadata: true,
-}
+// E0.4 (issue #24): the shell resolves its one active module (audio) from the
+// registry instead of importing engine code or its own copy of the defaults -
+// AppState.swift:16-20's values now live in exactly one place, modules/audio/
+// index.ts's DEFAULT_SETTINGS.
+const audioModule = requireModule('audio')
 
 function App() {
   const { store, files, totalDuration, isCalculatingDuration } = useFileIntake()
-  const [settings, setSettings] = useState<SetupSettings>(DEFAULT_SETTINGS)
+  const [settings, setSettings] = useState<SetupSettings>(
+    audioModule.defaultSettings as SetupSettings,
+  )
   const [screen, setScreen] = useState<'setup' | 'convert'>('setup')
   const conversion = useConversion()
 

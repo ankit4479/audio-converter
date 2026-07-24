@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { audioModule } from '../modules/audio'
 import type { ScannedFile } from './audioFile'
 
 // Controlled by each test: lets us resolve duration scans in a specific order to
@@ -25,7 +26,7 @@ beforeEach(() => {
 
 describe('FileIntakeStore.addFiles', () => {
   it('adds new files and starts a duration scan', () => {
-    const store = new FileIntakeStore()
+    const store = new FileIntakeStore(audioModule)
     store.addFiles([scanned('a.mp3'), scanned('b.mp3')])
     const snap = store.getSnapshot()
     expect(snap.files.map((f) => f.displayName)).toEqual(['a.mp3', 'b.mp3'])
@@ -33,7 +34,7 @@ describe('FileIntakeStore.addFiles', () => {
   })
 
   it('ignores an empty or all-non-audio batch without notifying or starting a scan', () => {
-    const store = new FileIntakeStore()
+    const store = new FileIntakeStore(audioModule)
     let notified = false
     store.subscribe(() => {
       notified = true
@@ -44,14 +45,14 @@ describe('FileIntakeStore.addFiles', () => {
   })
 
   it('deduplicates against already-added files (dropping the same folder twice)', () => {
-    const store = new FileIntakeStore()
+    const store = new FileIntakeStore(audioModule)
     store.addFiles([scanned('a.mp3', 'Album/a.mp3'), scanned('b.mp3', 'Album/b.mp3')])
     store.addFiles([scanned('a.mp3', 'Album/a.mp3'), scanned('b.mp3', 'Album/b.mp3')])
     expect(store.getSnapshot().files).toHaveLength(2)
   })
 
   it('notifies subscribers when files are added', () => {
-    const store = new FileIntakeStore()
+    const store = new FileIntakeStore(audioModule)
     const listener = vi.fn()
     store.subscribe(listener)
     store.addFiles([scanned('a.mp3')])
@@ -64,7 +65,7 @@ describe('FileIntakeStore duration generation guard', () => {
     // Regression coverage for AppState.recalculateDuration's exact race: adding
     // files while a scan is in flight must not let the OLD scan's result win when
     // it resolves after the NEW one.
-    const store = new FileIntakeStore()
+    const store = new FileIntakeStore(audioModule)
 
     store.addFiles([scanned('a.mp3')]) // starts scan #1
     expect(pendingDurations).toHaveLength(1)
@@ -89,7 +90,7 @@ describe('FileIntakeStore duration generation guard', () => {
 
 describe('FileIntakeStore.clear', () => {
   it('resets files, duration, and the calculating flag', () => {
-    const store = new FileIntakeStore()
+    const store = new FileIntakeStore(audioModule)
     store.addFiles([scanned('a.mp3')])
     store.clear()
     const snap = store.getSnapshot()
@@ -99,7 +100,7 @@ describe('FileIntakeStore.clear', () => {
   })
 
   it('a duration scan in flight when clear() is called cannot resurrect files after clearing', async () => {
-    const store = new FileIntakeStore()
+    const store = new FileIntakeStore(audioModule)
     store.addFiles([scanned('a.mp3')])
     store.clear()
     pendingDurations[0]?.resolve(999)

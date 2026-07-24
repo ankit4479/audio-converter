@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FileIntakeStore } from '../intake/FileIntakeStore'
+import { audioModule } from '../modules/audio'
 import { SetupView, type SetupSettings } from './SetupView'
 
 const DEFAULT_SETTINGS: SetupSettings = {
@@ -12,7 +13,7 @@ const DEFAULT_SETTINGS: SetupSettings = {
 }
 
 function renderSetup(overrides: Partial<Parameters<typeof SetupView>[0]> = {}) {
-  const store = new FileIntakeStore()
+  const store = new FileIntakeStore(audioModule)
   const onSettingsChange = vi.fn()
   const onConvert = vi.fn()
   const props = {

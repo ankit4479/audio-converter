@@ -11,8 +11,8 @@
  * actually gets by not passing this option.
  */
 import type { AudioFile } from '../intake/audioFile'
+import { requireModule } from '../platform/registry'
 import type { ConversionSettings } from './codec'
-import { Converter } from './converter'
 import {
   decodeConversionError,
   isEncodedConversionError,
@@ -49,15 +49,21 @@ export interface JobConverter {
 
 export interface BatchSchedulerOptions {
   concurrency?: number
-  createConverter?: () => JobConverter
+  createConverter?: () => JobConverter | Promise<JobConverter>
   /** Called once a job settles (done or failed), before its worker slot picks up
    *  the next job. The batch's caller - not BatchScheduler - owns writing the
    *  result to disk (issue #10's OutputDestination); this is just the hook. */
   onJobSettled?: (job: BatchJob) => void | Promise<void>
 }
 
-function defaultConverterFactory(): JobConverter {
-  return new Converter()
+// E0.4 (issue #24): the audio engine is now reached only through the registered
+// ConverterModule, never by importing engine/converter.ts's Converter directly -
+// the same abstraction boundary #23 declared, now actually load-bearing. The
+// module id is hardcoded here (rather than threaded in as an option) because
+// this scheduler is still audio-only; a later multi-module issue is what would
+// turn this into a parameter.
+async function defaultConverterFactory(): Promise<JobConverter> {
+  return requireModule('audio').loadEngine()
 }
 
 // ConversionEngine.swift:32
@@ -113,7 +119,7 @@ export class BatchScheduler {
   private readonly listeners = new Set<() => void>()
   private readonly controllers = new Map<string, AbortController>()
   private readonly concurrency: number
-  private readonly createConverter: () => JobConverter
+  private readonly createConverter: () => JobConverter | Promise<JobConverter>
   private readonly onJobSettled?: (job: BatchJob) => void | Promise<void>
 
   constructor(options: BatchSchedulerOptions = {}) {
@@ -190,7 +196,7 @@ export class BatchScheduler {
     }
 
     const runWorkerSlot = async (): Promise<void> => {
-      const converter = this.createConverter()
+      const converter = await this.createConverter()
       try {
         while (!this.cancelRequested) {
           const index = claimNext()

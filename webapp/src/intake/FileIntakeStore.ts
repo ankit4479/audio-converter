@@ -1,3 +1,4 @@
+import type { ConverterModule } from '../platform/module'
 import { deduplicateAgainst, type AudioFile, type ScannedFile } from './audioFile'
 import { totalDuration } from './duration'
 import { filterAndBuildAudioFiles } from './intake'
@@ -26,6 +27,11 @@ export class FileIntakeStore {
   private snapshot: FileIntakeSnapshot = EMPTY_SNAPSHOT
   private generation = 0
   private readonly listeners = new Set<() => void>()
+  private readonly module: Pick<ConverterModule, 'accepts'>
+
+  constructor(module: Pick<ConverterModule, 'accepts'>) {
+    this.module = module
+  }
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener)
@@ -41,7 +47,7 @@ export class FileIntakeStore {
 
   /** Ported from AppState.addFiles (AppState.swift:52-60). */
   addFiles(scanned: readonly ScannedFile[]): void {
-    const candidates = filterAndBuildAudioFiles(scanned)
+    const candidates = filterAndBuildAudioFiles(scanned, this.module)
     if (candidates.length === 0) return
     const newFiles = deduplicateAgainst(this.snapshot.files, candidates)
     if (newFiles.length === 0) return
