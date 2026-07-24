@@ -1,10 +1,5 @@
 import type { Config } from '@react-router/dev/config'
-import {
-  allEdges,
-  allFormatNodes,
-  edgesForCategory,
-  edgeToSlug,
-} from './src/platform/graph'
+import { allEdges, categoriesWithConversions, edgeToSlug } from './src/platform/graph'
 
 // No server: every route ships as static HTML at build time (issue #25). The
 // converter itself already runs entirely client-side (WebCodecs/WASM), so there
@@ -16,14 +11,6 @@ import {
 // production - it's the tool's own server-runtime-detection requirement, not
 // a real runtime dependency of this static site.
 const ssr = false
-
-// A category only gets a hub page once some module actually serves it - today
-// that's audio alone, matching graph.ts's comment that non-audio categories are
-// present as FormatNode/CategoryId scaffolding but have no real edges yet.
-function categoriesWithConversions() {
-  const categories = new Set(allFormatNodes().map((node) => node.category))
-  return [...categories].filter((category) => edgesForCategory(category).length > 0)
-}
 
 async function prerender() {
   const home = ['/']

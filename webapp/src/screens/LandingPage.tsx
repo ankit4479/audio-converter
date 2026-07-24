@@ -13,6 +13,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Card, CardContent } from '../components/ui/card'
+import { MegaMenu } from '../platform/MegaMenu'
+import { MegaMenuDrawer } from '../platform/MegaMenuDrawer'
 import { ConversionDemo } from './ConversionDemo'
 
 const GITHUB_URL = 'https://github.com/ankit4479/audio-converter'
@@ -79,9 +81,17 @@ export function LandingPage({
 function SiteHeader() {
   return (
     <header className="border-b border-border">
-      <div className="mx-auto flex max-w-[760px] items-center justify-between px-6 py-4">
-        <span className="font-semibold text-text-primary">Audio Converter</span>
-        <Badge variant="outline">Private by design</Badge>
+      <div className="mx-auto flex max-w-[760px] items-center justify-between gap-4 px-6 py-4">
+        <div className="flex items-center gap-4">
+          <span className="font-semibold text-text-primary">Audio Converter</span>
+          <MegaMenu />
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="hidden sm:inline-flex">
+            Private by design
+          </Badge>
+          <MegaMenuDrawer />
+        </div>
       </div>
     </header>
   )

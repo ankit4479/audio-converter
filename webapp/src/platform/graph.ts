@@ -97,6 +97,16 @@ export function edgesForCategory(category: CategoryId): readonly ConversionEdge[
   return EDGES.filter((edge) => formatNode(edge.from)?.category === category)
 }
 
+/** Every category with at least one real conversion - most categories in
+ *  CategoryId are scaffolding with no module yet (see module.ts), so most of
+ *  them have zero edges. Shared by react-router.config.ts/routes.ts (which
+ *  routes to generate) and MegaMenu.tsx (which nav columns to show), so the
+ *  three can never disagree about what's actually live. */
+export function categoriesWithConversions(): readonly CategoryId[] {
+  const categories = new Set(FORMAT_NODES.map((node) => node.category))
+  return [...categories].filter((category) => edgesForCategory(category).length > 0)
+}
+
 export function moduleForEdge(from: FormatId, to: FormatId): string | undefined {
   return EDGES.find((edge) => edge.from === from && edge.to === to)?.moduleId
 }
