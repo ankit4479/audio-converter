@@ -13,6 +13,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { Badge } from '../components/ui/badge'
 import { Button } from '../components/ui/button'
 import { Card, CardContent } from '../components/ui/card'
+import { CommandPalette } from '../platform/CommandPalette'
 import { MegaMenu } from '../platform/MegaMenu'
 import { MegaMenuDrawer } from '../platform/MegaMenuDrawer'
 import { ConversionDemo } from './ConversionDemo'
@@ -87,6 +88,7 @@ function SiteHeader() {
           <MegaMenu />
         </div>
         <div className="flex items-center gap-2">
+          <CommandPalette />
           <Badge variant="outline" className="hidden sm:inline-flex">
             Private by design
           </Badge>

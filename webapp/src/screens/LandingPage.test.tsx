@@ -1,10 +1,19 @@
 import { fireEvent, render, screen } from '@testing-library/react'
+import type { ReactElement } from 'react'
+import { MemoryRouter } from 'react-router'
 import { describe, expect, it, vi } from 'vitest'
 import { LandingPage } from './LandingPage'
 
+// CommandPalette (#27) reads/writes the route via react-router's useNavigate, which
+// throws outside a Router context - every render needs one, same as any other test
+// that mounts a component using react-router hooks.
+function renderLandingPage(node: ReactElement) {
+  return render(<MemoryRouter>{node}</MemoryRouter>)
+}
+
 describe('LandingPage - setup screen', () => {
   it('shows the header, hero, privacy, and how-it-works sections, with the tool hidden until "Start converting" is clicked', () => {
-    render(
+    renderLandingPage(
       <LandingPage screen="setup">
         <p>the tool goes here</p>
       </LandingPage>,
@@ -29,7 +38,7 @@ describe('LandingPage - setup screen', () => {
   })
 
   it('reveals the tool once "Start converting" is clicked', () => {
-    render(
+    renderLandingPage(
       <LandingPage screen="setup">
         <p>the tool goes here</p>
       </LandingPage>,
@@ -43,7 +52,7 @@ describe('LandingPage - setup screen', () => {
 
   it('scrolls to the tool again on a second click, after the user has scrolled back up to the hero', () => {
     const scrollSpy = vi.spyOn(Element.prototype, 'scrollIntoView')
-    render(
+    renderLandingPage(
       <LandingPage screen="setup">
         <p>the tool goes here</p>
       </LandingPage>,
@@ -60,7 +69,7 @@ describe('LandingPage - setup screen', () => {
   })
 
   it('places privacy and how-it-works between the hero and the tool, so the tool never sits directly under the header', () => {
-    const { container } = render(
+    const { container } = renderLandingPage(
       <LandingPage screen="setup">
         <p>the tool goes here</p>
       </LandingPage>,
@@ -79,7 +88,7 @@ describe('LandingPage - setup screen', () => {
   })
 
   it('does not have a dedicated "why open source" section with its own link out', () => {
-    render(
+    renderLandingPage(
       <LandingPage screen="setup">
         <p>tool</p>
       </LandingPage>,
@@ -100,7 +109,7 @@ describe('LandingPage - setup screen', () => {
 
 describe('LandingPage - convert screen', () => {
   it('hides the visible hero and marketing sections, keeping only the header and the tool, to stay focused on progress', () => {
-    render(
+    renderLandingPage(
       <LandingPage screen="convert">
         <p>converting now</p>
       </LandingPage>,
@@ -116,7 +125,7 @@ describe('LandingPage - convert screen', () => {
   })
 
   it('still has exactly one h1 in the accessibility tree, even with the visible hero hidden', () => {
-    render(
+    renderLandingPage(
       <LandingPage screen="convert">
         <p>converting now</p>
       </LandingPage>,

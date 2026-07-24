@@ -19,7 +19,9 @@ import {
   type ConversionEdge,
 } from './graph'
 
-const CATEGORY_LABELS: Record<CategoryId, string> = {
+// Exported for CommandPalette (#27), which needs the same category labels for its
+// result groups - one label set, not a second copy to drift out of sync.
+export const CATEGORY_LABELS: Record<CategoryId, string> = {
   audio: 'Audio',
   image: 'Image',
   video: 'Video',

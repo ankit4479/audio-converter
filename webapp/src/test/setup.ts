@@ -41,3 +41,34 @@ if (
 ) {
   Element.prototype.scrollIntoView = () => {}
 }
+
+// Node 22+'s own experimental global `localStorage` shadows jsdom's with a stub
+// that has no methods at all (window.localStorage exists but every call throws
+// "is not a function") - caught via recentConversions.test.ts failing under plain
+// `npm test` despite passing with NODE_OPTIONS=--no-experimental-webstorage. A
+// small in-memory polyfill sidesteps the conflict without depending on how the
+// test runner is invoked.
+if (typeof window !== 'undefined' && typeof window.localStorage?.getItem !== 'function') {
+  const store = new Map<string, string>()
+  const polyfill: Storage = {
+    get length() {
+      return store.size
+    },
+    getItem: (key) => (store.has(key) ? store.get(key)! : null),
+    setItem: (key, value) => {
+      store.set(key, value)
+    },
+    removeItem: (key) => {
+      store.delete(key)
+    },
+    clear: () => {
+      store.clear()
+    },
+    key: (index) => [...store.keys()][index] ?? null,
+  }
+  Object.defineProperty(window, 'localStorage', {
+    value: polyfill,
+    configurable: true,
+    writable: true,
+  })
+}
