@@ -11,6 +11,7 @@ import type { CategoryId } from './module'
 import {
   categoriesWithConversions,
   edgesForCategory,
+  edgeLabel,
   edgeToSlug,
   formatNode,
 } from './graph'
@@ -40,7 +41,7 @@ export function buildPaletteIndex(): PaletteEntry[] {
         const slug = edgeToSlug(edge.from, edge.to)
         return {
           slug,
-          label: `${fromLabel} to ${toLabel}`,
+          label: edgeLabel(edge.from, edge.to),
           category,
           href: `/${slug}`,
           keywords: [

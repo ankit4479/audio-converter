@@ -79,7 +79,10 @@ export function LandingPage({
   )
 }
 
-function SiteHeader() {
+// Exported for HomePage (#28), which reuses the same header, privacy, how-it-works,
+// and footer sections rather than re-implementing them - only the hero and
+// discovery surfaces (search, category grid, popular strip) differ there.
+export function SiteHeader() {
   return (
     <header className="border-b border-border">
       <div className="mx-auto flex max-w-[760px] items-center justify-between gap-4 px-6 py-4">
@@ -133,7 +136,7 @@ const PRIVACY_POINTS = [
   },
 ]
 
-function PrivacySection() {
+export function PrivacySection() {
   return (
     <div className="mx-auto max-w-[760px] px-6 py-6">
       <h2 className="text-center text-xl font-semibold text-text-primary">
@@ -159,7 +162,7 @@ const STEPS = [
   { title: 'Get them back', body: 'Converted, right where you dropped them from.' },
 ]
 
-function HowItWorksSection() {
+export function HowItWorksSection() {
   return (
     <div className="mx-auto max-w-[760px] px-6 pb-6">
       <h2 className="text-center text-xl font-semibold text-text-primary">
@@ -180,7 +183,7 @@ function HowItWorksSection() {
   )
 }
 
-function SiteFooter() {
+export function SiteFooter() {
   return (
     <footer className="border-t border-border py-4 text-center text-caption text-text-secondary">
       Free and open source.{' '}

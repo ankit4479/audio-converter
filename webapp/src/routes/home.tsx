@@ -1,10 +1,9 @@
-import App from '../App'
-import { ClientOnlyWidget } from './ClientOnlyWidget'
+import { HomePage } from '../platform/HomePage'
 
-// The index route ("/"): same widget as before framework mode (#25), now
-// reached through the router instead of main.tsx rendering it directly, and
-// deferred to the client past prerender (see ClientOnlyWidget). Home redesign
-// is #28's job, not this issue's.
+// The index route ("/"): the platform home page (#28) - a discovery surface for
+// every category, not the audio tool itself. Needs no ClientOnlyWidget gating
+// (unlike hub.tsx/conversion.tsx) since HomePage has no browser-only state, so
+// it prerenders for real.
 export default function HomeRoute() {
-  return <ClientOnlyWidget>{() => <App />}</ClientOnlyWidget>
+  return <HomePage />
 }

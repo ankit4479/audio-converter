@@ -128,6 +128,13 @@ export function edgeToSlug(from: FormatId, to: FormatId): string {
   return `${from}-to-${to}`
 }
 
+/** Human-readable label for an edge, e.g. "WAV to MP3" - shared by the Cmd+K
+ *  palette (#27) and the home page's search/popular strip (#28) so the exact
+ *  phrasing can't drift between the two. */
+export function edgeLabel(from: FormatId, to: FormatId): string {
+  return `${formatNode(from)?.label ?? from} to ${formatNode(to)?.label ?? to}`
+}
+
 /** Inverse of edgeToSlug. Returns undefined for a slug that isn't a real edge
  *  (unknown ids, or a valid-looking pair with no supported conversion between
  *  them) so a route handler can 404 rather than render a page for a made-up pair. */

@@ -1,5 +1,12 @@
 import { Links, Meta, Outlet, Scripts, ScrollRestoration } from 'react-router'
 import './index.css'
+// Registers every built-in module (modules/register.ts's side effect) once, for
+// every route - previously only routes that imported App.tsx got this for free,
+// which silently broke SiteHeader's MegaMenu/MegaMenuDrawer (both read the
+// registry) on HomePage (#28), the first route with no App.tsx import at all.
+// Root wraps every route (see routes.ts), so this is the one place that can't
+// be skipped no matter which page component a route renders.
+import './modules/register'
 
 // Site-wide tags carried over from the old index.html - framework mode (#25)
 // generates the document itself from this component instead of a static HTML
