@@ -29,11 +29,12 @@ import type {
   SettingField,
 } from '../../platform/module'
 
-// Mirrors AppState.swift's defaults, also hardcoded today in App.tsx's
-// DEFAULT_SETTINGS - #24 points App.tsx at this constant instead of keeping its
-// own copy, closing that duplication once the app actually consumes the module.
+// Was a straight mirror of AppState.swift's defaults; the web app now
+// deliberately diverges on codec only (MP3, not FLAC) since most web visitors
+// want the smaller, universally-playable format by default. The native macOS
+// app's default is unchanged.
 const DEFAULT_SETTINGS: ConversionSettings = {
-  codec: 'flac',
+  codec: 'mp3',
   quality: 'best',
   compression: 'balanced',
   sampleRate: 'keepOriginal',

@@ -72,9 +72,9 @@ describe('audioModule.settingsSchema / defaultSettings', () => {
     )
   })
 
-  it("defaultSettings matches AppState.swift's documented defaults (also App.tsx's today)", () => {
+  it("defaultSettings: MP3 output, otherwise matching AppState.swift's documented defaults", () => {
     expect(audioModule.defaultSettings).toEqual({
-      codec: 'flac',
+      codec: 'mp3',
       quality: 'best',
       compression: 'balanced',
       sampleRate: 'keepOriginal',
