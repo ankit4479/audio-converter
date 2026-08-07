@@ -74,8 +74,60 @@ const AUDIO_EDGES: readonly ConversionEdge[] = CODEC_IDS.flatMap((from) =>
   })),
 )
 
-const FORMAT_NODES: readonly FormatNode[] = AUDIO_FORMAT_NODES
-const EDGES: readonly ConversionEdge[] = AUDIO_EDGES
+const IMAGE_MODULE_ID = 'image'
+
+/**
+ * Image formats (E2.1, issue #31). Written out here rather than derived from a
+ * codec table the way audio is: there is no equivalent table to derive from, since
+ * the browser itself is the codec (createImageBitmap to decode, OffscreenCanvas or
+ * a WASM encoder to encode - see modules/image/).
+ *
+ * Every one of these is both a source and a target, so unlike audio there is no
+ * encodable-subset filter. HEIC/HEIF (#32) and SVG (#33/#34) join this list in
+ * their own issues; they are asymmetric (decode-only and vector) and each needs a
+ * decoder this issue doesn't ship.
+ *
+ * The first extension is the canonical one, used for output file names
+ * (output/outputPath.ts); any others are aliases that only ever appear as input,
+ * which is why 'jpeg' is listed but never produced.
+ */
+const IMAGE_FORMATS = [
+  { id: 'png', label: 'PNG', extensions: ['png'], mime: 'image/png' },
+  { id: 'jpg', label: 'JPEG', extensions: ['jpg', 'jpeg'], mime: 'image/jpeg' },
+  { id: 'webp', label: 'WebP', extensions: ['webp'], mime: 'image/webp' },
+  { id: 'avif', label: 'AVIF', extensions: ['avif'], mime: 'image/avif' },
+] as const
+
+/** The image format ids, as a closed union rather than a plain FormatId, so a
+ *  format added to the table above is a compile error everywhere the image module
+ *  enumerates formats (its MIME/extension/alpha tables) until it is handled. */
+export type ImageFormatId = (typeof IMAGE_FORMATS)[number]['id']
+
+/** Exported so modules/image builds its input/output lists from this table rather
+ *  than repeating it - the same reason AUDIO_ENCODABLE_TARGETS is exported above. A
+ *  second, hand-written copy of the list in the module could drift out of step with
+ *  the graph, and then outputExtension() would return undefined for a target the
+ *  module still offered and ConverterShell would name output files with the bare
+ *  format id. */
+export const IMAGE_FORMAT_IDS: readonly ImageFormatId[] = IMAGE_FORMATS.map(
+  (format) => format.id,
+)
+
+const IMAGE_FORMAT_NODES: readonly FormatNode[] = IMAGE_FORMATS.map((format) => ({
+  ...format,
+  category: 'image' as const,
+}))
+
+const IMAGE_EDGES: readonly ConversionEdge[] = IMAGE_FORMATS.flatMap((from) =>
+  IMAGE_FORMATS.filter((to) => to.id !== from.id).map((to) => ({
+    from: from.id,
+    to: to.id,
+    moduleId: IMAGE_MODULE_ID,
+  })),
+)
+
+const FORMAT_NODES: readonly FormatNode[] = [...AUDIO_FORMAT_NODES, ...IMAGE_FORMAT_NODES]
+const EDGES: readonly ConversionEdge[] = [...AUDIO_EDGES, ...IMAGE_EDGES]
 
 const NODES_BY_ID: ReadonlyMap<FormatId, FormatNode> = new Map(
   FORMAT_NODES.map((node) => [node.id, node]),
@@ -83,6 +135,13 @@ const NODES_BY_ID: ReadonlyMap<FormatId, FormatNode> = new Map(
 
 export function formatNode(id: FormatId): FormatNode | undefined {
   return NODES_BY_ID.get(id)
+}
+
+/** The extension output files of this format get, e.g. 'mp3' or 'jpg'. The first
+ *  of a node's extensions is the canonical one; the rest are input-only aliases
+ *  ('jpeg'), so this is what output/outputPath.ts names files with. */
+export function outputExtension(id: FormatId): string | undefined {
+  return formatNode(id)?.extensions[0]
 }
 
 export function allFormatNodes(): readonly FormatNode[] {

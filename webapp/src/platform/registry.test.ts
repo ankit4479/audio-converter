@@ -10,7 +10,13 @@ function fakeModule(
     id,
     category,
     label: id,
+    presentation: {
+      item: { singular: 'file', plural: 'files' },
+      intakeHint: 'anything',
+      tracksDuration: false,
+    },
     accepts: () => true,
+    targetSettingKey: 'format',
     inputFormats: [],
     outputFormats: [],
     settingsSchema: [],

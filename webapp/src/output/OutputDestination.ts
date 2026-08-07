@@ -99,12 +99,12 @@ export class OutputDestination {
    *  ConvertView.swift:32) - a browser can only ever show the chosen folder's own
    *  name, never a full filesystem path, since the File System Access API doesn't
    *  expose one. */
-  destinationLabel(codecLabel: string): string {
+  destinationLabel(targetLabel: string): string {
     if (this.mode === 'directory') {
-      return `Saving to: ${this.directoryHandle?.name ?? ''} (${codecLabel})`
+      return `Saving to: ${this.directoryHandle?.name ?? ''} (${targetLabel})`
     }
-    if (this.mode === 'zip') return `Downloading as one zip (${codecLabel})`
-    return `Downloading directly (${codecLabel})`
+    if (this.mode === 'zip') return `Downloading as one zip (${targetLabel})`
+    return `Downloading directly (${targetLabel})`
   }
 
   async write(relativePath: string, blob: Blob): Promise<void> {

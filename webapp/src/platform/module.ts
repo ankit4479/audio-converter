@@ -116,16 +116,45 @@ export interface ConverterEngine<TSettings = Record<string, unknown>> {
  *  ConversionSettings>) keeps its real settings type end to end, while code that
  *  only needs to hold modules generically (the registry, #22) can use the
  *  unparameterized ConverterModule<Record<string, unknown>> default. */
+/**
+ * The words the shared tool layout needs from a module (E2.1, issue #31). The
+ * layout is one screen for every module, but a handful of its strings can only
+ * come from the module: "2 songs added" is wrong for images and "2 images added"
+ * is wrong for audio.
+ *
+ * Deliberately plain data, not JSX - this file must stay worker-safe (no React,
+ * see the header), and a module's engine is loaded inside a Worker.
+ */
+export interface ModulePresentation {
+  /** What one input file is called, e.g. { singular: 'song', plural: 'songs' }. */
+  readonly item: { readonly singular: string; readonly plural: string }
+  /** The line under the drop zone listing what can be dropped. */
+  readonly intakeHint: string
+  /** Whether a total playing time means anything for these files. False for images,
+   *  which stops the intake store both computing and showing one. */
+  readonly tracksDuration: boolean
+}
+
 export interface ConverterModule<TSettings = Record<string, unknown>> {
   readonly id: string
   readonly category: CategoryId
   readonly label: string
+  readonly presentation: ModulePresentation
 
   /** Whether this module can take the given file as input. */
   accepts(file: FileMeta): boolean
 
   readonly inputFormats: readonly FormatId[]
   readonly outputFormats: readonly FormatId[]
+
+  /** Which key of this module's settings holds the output format id - 'codec' for
+   *  audio, 'format' for image (E2.1, issue #31).
+   *
+   *  The shell needs to read and write that one field generically: it is the field
+   *  the URL owns (a target change is a navigation, #29), and it is what tells the
+   *  shell the output extension and label to run a batch with. Without this the
+   *  shell would have to know that audio settings happen to call it `codec`. */
+  readonly targetSettingKey: string
 
   readonly settingsSchema: readonly SettingField[]
   readonly defaultSettings: TSettings

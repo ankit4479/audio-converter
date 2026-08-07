@@ -108,7 +108,17 @@ export const audioModule: ConverterModule<ConversionSettings> = {
   id: 'audio',
   category: 'audio',
   label: 'Audio',
+  // Exactly the wording SetupView had inline before E2.1 (issue #31) moved these
+  // strings behind the module contract, so the audio screen reads identically.
+  presentation: {
+    item: { singular: 'song', plural: 'songs' },
+    intakeHint: 'MP3, FLAC, WAV, AAC, ALAC, Opus, and more. Mixed formats are fine.',
+    tracksDuration: true,
+  },
   accepts: (file: FileMeta) => isAudioFileName(file.name),
+  // ConversionSettings calls the output format `codec`; the shell reads and writes
+  // it through this name rather than knowing audio's own field names (#31).
+  targetSettingKey: 'codec',
   // Matches graph.ts's edge model exactly: any codec can be a nominal source
   // ("from"), but only AUDIO_ENCODABLE_TARGETS actually have a working encoder
   // ("to") today.

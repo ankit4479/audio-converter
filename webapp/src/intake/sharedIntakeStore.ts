@@ -13,8 +13,7 @@
  * Module-level rather than a React context because it has to outlive the subtree
  * a context provider would live in - the remount is the whole problem.
  */
-import { FileIntakeStore } from './FileIntakeStore'
-import type { ConverterModule } from '../platform/module'
+import { FileIntakeStore, type IntakeModule } from './FileIntakeStore'
 
 let shared: FileIntakeStore | null = null
 
@@ -26,9 +25,7 @@ let shared: FileIntakeStore | null = null
  * Retargeting here instead would mean mutating a store other components are
  * subscribed to while React is rendering.
  */
-export function sharedIntakeStore(
-  module: Pick<ConverterModule, 'accepts'>,
-): FileIntakeStore {
+export function sharedIntakeStore(module: IntakeModule): FileIntakeStore {
   shared ??= new FileIntakeStore(module)
   return shared
 }

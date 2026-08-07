@@ -7,14 +7,29 @@
  */
 import type { AudioFile } from '../intake/audioFile'
 import { BatchScheduler, type JobConverter } from '../engine/batchScheduler'
-import { CODECS, type ConversionSettings } from '../engine/codec'
 import { OutputDestination } from '../output/OutputDestination'
 import { resolveOutputPaths } from '../output/outputPath'
 
-export interface ConversionSnapshot {
-  readonly scheduler: BatchScheduler | null
+/**
+ * Everything about the format being produced that this controller needs, gathered
+ * by the caller (ConverterShell, which knows the page's module and target) rather
+ * than read out of engine/codec.ts's audio table as it was before E2.1, issue #31.
+ * A second module has no entry in that table.
+ */
+export interface ConversionTarget {
+  /** Registered module whose engine runs the batch. */
+  readonly moduleId: string
+  /** Extension every output file gets, e.g. 'mp3' or 'jpg'. */
+  readonly extension: string
+  /** Human name for the format, shown on the convert screen ("Converting: x to
+   *  WebP"). */
+  readonly label: string
+}
+
+export interface ConversionSnapshot<TSettings = unknown> {
+  readonly scheduler: BatchScheduler<TSettings> | null
   readonly destination: OutputDestination | null
-  readonly codecLabel: string
+  readonly targetLabel: string
   /** True once finalizing the destination (writing the last directory file is
    *  synchronous and already done by this point; building/downloading a zip is
    *  not) has settled. The done card gates on this, not just scheduler.isFinished
@@ -30,7 +45,7 @@ export interface ConversionSnapshot {
 const EMPTY_SNAPSHOT: ConversionSnapshot = {
   scheduler: null,
   destination: null,
-  codecLabel: '',
+  targetLabel: '',
   finalized: false,
   finishError: null,
 }
@@ -44,17 +59,17 @@ interface RunToken {
   canceled: boolean
 }
 
-export class ConversionController {
-  private snapshot: ConversionSnapshot = EMPTY_SNAPSHOT
+export class ConversionController<TSettings = unknown> {
+  private snapshot: ConversionSnapshot<TSettings> = EMPTY_SNAPSHOT
   private readonly listeners = new Set<() => void>()
   private unsubscribeScheduler: (() => void) | null = null
   private currentRunToken: RunToken | null = null
   /** Only ever overridden in tests, the same reasoning batchScheduler.ts's own
    *  header comment gives: real Workers aren't available in jsdom. Production
    *  code gets BatchScheduler's real default by leaving this undefined. */
-  private readonly createConverter: (() => JobConverter) | undefined
+  private readonly createConverter: (() => JobConverter<TSettings>) | undefined
 
-  constructor(createConverter?: () => JobConverter) {
+  constructor(createConverter?: () => JobConverter<TSettings>) {
     this.createConverter = createConverter
   }
 
@@ -63,9 +78,9 @@ export class ConversionController {
     return () => this.listeners.delete(listener)
   }
 
-  getSnapshot = (): ConversionSnapshot => this.snapshot
+  getSnapshot = (): ConversionSnapshot<TSettings> => this.snapshot
 
-  private setSnapshot(next: ConversionSnapshot): void {
+  private setSnapshot(next: ConversionSnapshot<TSettings>): void {
     this.snapshot = next
     for (const listener of this.listeners) listener()
   }
@@ -77,23 +92,24 @@ export class ConversionController {
    * should stay on the setup screen in that case, same as the Mac app's early
    * `guard` return.
    *
-   * moduleId names the module whose engine runs the batch (E1.5, issue #29): the
-   * shell can be driving a different one per page now, so this can't be assumed.
+   * `target` says which module's engine runs the batch and what is being produced
+   * (E1.5, issue #29 for the module, E2.1, issue #31 for the rest): the shell can
+   * be driving a different module per page now, so none of it can be assumed.
    */
   async start(
     files: readonly AudioFile[],
-    settings: ConversionSettings,
-    moduleId: string,
+    settings: TSettings,
+    target: ConversionTarget,
   ): Promise<boolean> {
     const destination = await OutputDestination.choose(files.length)
     if (!destination) return false
 
     const outputPaths = resolveOutputPaths(
       files.map((f) => f.relativePath),
-      settings.codec,
+      target.extension,
     )
-    const scheduler = new BatchScheduler({
-      moduleId,
+    const scheduler = new BatchScheduler<TSettings>({
+      moduleId: target.moduleId,
       createConverter: this.createConverter,
       onJobSettled: async (job) => {
         if (job.status.kind !== 'done') return
@@ -111,7 +127,7 @@ export class ConversionController {
     this.setSnapshot({
       scheduler,
       destination,
-      codecLabel: CODECS[settings.codec].label,
+      targetLabel: target.label,
       finalized: false,
       finishError: null,
     })

@@ -3,8 +3,6 @@
  * Pure path arithmetic, no filesystem access, so the collision rule (issue #10's
  * "the way Finder does it") is fully testable without a real directory handle.
  */
-import { CODECS, type CodecId } from '../engine/codec'
-
 /**
  * Splits a relative path's last component into a base and extension, matching
  * Foundation's NSString.deletingPathExtension/pathExtension (what resolvedOutputURL
@@ -28,10 +26,16 @@ function splitExtension(relativePath: string): { base: string; extension: string
   }
 }
 
-/** Swaps the extension for the target codec's, same as resolvedOutputURL. */
-export function resolvedOutputPath(relativePath: string, codec: CodecId): string {
+/** Swaps the extension for the target format's, same as resolvedOutputURL.
+ *
+ *  Takes the extension itself rather than an audio CodecId (which is what it read
+ *  out of engine/codec.ts's CODECS table until E2.1, issue #31): a second module
+ *  has no entry in that table, and the graph's own FormatNode.extensions is
+ *  already the source of truth for every format's extension - see
+ *  platform/graph.ts's outputExtension(). */
+export function resolvedOutputPath(relativePath: string, extension: string): string {
   const { base } = splitExtension(relativePath)
-  return `${base}.${CODECS[codec].fileExtension}`
+  return `${base}.${extension}`
 }
 
 /**
@@ -57,7 +61,9 @@ export function deduplicatePaths(paths: readonly string[]): string[] {
  *  written - the collision rule needs the full batch, not just one file at a time. */
 export function resolveOutputPaths(
   relativePaths: readonly string[],
-  codec: CodecId,
+  extension: string,
 ): string[] {
-  return deduplicatePaths(relativePaths.map((path) => resolvedOutputPath(path, codec)))
+  return deduplicatePaths(
+    relativePaths.map((path) => resolvedOutputPath(path, extension)),
+  )
 }

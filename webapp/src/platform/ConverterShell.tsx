@@ -19,13 +19,14 @@
  */
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
-import type { CodecId } from '../engine/codec'
 import { useFileIntake } from '../intake/useFileIntake'
 import { ConvertView } from '../screens/ConvertView'
-import { SetupView, type SetupSettings } from '../screens/SetupView'
+import { SetupView } from '../screens/SetupView'
 import { useConversion } from '../screens/useConversion'
 import { ClientOnlyWidget } from './ClientOnlyWidget'
 import { targetForEdge } from './converterTargets'
+import { formatNode, outputExtension } from './graph'
+import { ModuleSettings } from './ModuleSettings'
 import type { FormatId } from './module'
 import { requireModule } from './registry'
 import { rememberSettings, sharedSettings } from './sharedSettings'
@@ -42,7 +43,7 @@ export interface ConverterShellProps {
    *  no source there is no edge, so no target change can become a navigation. */
   source?: FormatId
   /** The output format the page's URL already promises. */
-  target?: CodecId
+  target?: FormatId
   /** Rendered between the h1 and the tool, inside the prerendered frame - the hub
    *  pages put their ConverterSelect here, so its target links are in the static
    *  HTML a crawler sees rather than appearing only after hydration. */
@@ -101,21 +102,22 @@ function ConverterWidget({
   const module = requireModule(moduleId)
   const { store, files, totalDuration, isCalculatingDuration, droppedOnModuleChange } =
     useFileIntake(module)
-  // defaultSettings is typed `unknown` on a registry-resolved module (see
-  // registry.ts) - the shell knows it is driving an audio module here because
-  // SetupView/ConvertView are still audio-specific; a settingsSchema-driven
-  // generic panel is a later issue.
+  // Opaque to the shell (E2.1, issue #31): only the module's own panel, or the
+  // schema-driven one, knows what shape these settings have. The one field the shell
+  // does touch is named by the module - targetSettingKey - because that is the field
+  // the URL owns.
   //
-  // Seeded from sharedSettings, not straight from the defaults: a target change is
-  // a navigation that remounts this widget, so anything the user had tuned (sample
+  // Seeded from sharedSettings, not straight from the defaults: a target change is a
+  // navigation that remounts this widget, so anything the user had tuned (sample
   // rate, quality, song info) would otherwise be silently back at the defaults on
-  // the page they land on - and the batch would run with those. The URL's own
-  // target still wins over the remembered codec, so the picker can never disagree
-  // with the address bar.
-  const [settings, setSettings] = useState<SetupSettings>(() => ({
-    ...sharedSettings(moduleId, module.defaultSettings as SetupSettings),
-    ...(target === undefined ? {} : { codec: target }),
+  // the page they land on - and the batch would run with those. The URL's own target
+  // still wins over the remembered one, so the picker can never disagree with the
+  // address bar.
+  const [settings, setSettings] = useState<Record<string, unknown>>(() => ({
+    ...(sharedSettings(moduleId, module.defaultSettings) as Record<string, unknown>),
+    ...(target === undefined ? {} : { [module.targetSettingKey]: target }),
   }))
+  const targetFormat = String(settings[module.targetSettingKey] ?? '')
   const [screen, setScreen] = useState<'setup' | 'convert'>('setup')
   const conversion = useConversion()
   const navigate = useNavigate()
@@ -131,16 +133,24 @@ function ConverterWidget({
 
   // Every settings change is remembered for this module as well as rendered, so it
   // survives the remount a target change causes (see sharedSettings.ts).
-  const handleSettingsChange = (next: SetupSettings) => {
+  const handleSettingsChange = (next: unknown) => {
     rememberSettings(moduleId, next)
-    setSettings(next)
+    setSettings(next as Record<string, unknown>)
   }
 
   // AppState.chooseDestinationAndConvert: prompts for a destination, then starts
   // the batch. Stays on setup if the user cancels the destination picker.
   const handleConvert = () => {
     void (async () => {
-      const started = await controller.start(files, settings, moduleId)
+      const started = await controller.start(files, settings, {
+        moduleId,
+        // Both come from the graph rather than from any module's own table, so one
+        // lookup serves every module. A format with no node would be a graph/module
+        // disagreement, so fall back to the id itself rather than writing files with
+        // no extension at all.
+        extension: outputExtension(targetFormat) ?? targetFormat,
+        label: formatNode(targetFormat)?.label ?? targetFormat,
+      })
       if (started) setScreen('convert')
     })()
   }
@@ -175,9 +185,9 @@ function ConverterWidget({
    * selection and again on blur - since navigate() to the current path would
    * otherwise push a duplicate history entry and cost the back button a press.
    */
-  const handleTargetCommit = (codec: CodecId) => {
-    if (codec === target) return
-    const edge = source === undefined ? undefined : targetForEdge(source, codec)
+  const handleTargetCommit = (format: FormatId) => {
+    if (format === target) return
+    const edge = source === undefined ? undefined : targetForEdge(source, format)
     if (!edge) return
     void navigate(edge.href)
   }
@@ -186,7 +196,7 @@ function ConverterWidget({
     <ConvertView
       scheduler={conversion.scheduler}
       destination={conversion.destination}
-      codecLabel={conversion.codecLabel}
+      targetLabel={conversion.targetLabel}
       finalized={conversion.finalized}
       onChange={handleChange}
       onConvertMore={handleConvertMore}
@@ -203,10 +213,17 @@ function ConverterWidget({
         files={files}
         totalDuration={totalDuration}
         isCalculatingDuration={isCalculatingDuration}
-        settings={settings}
-        onSettingsChange={handleSettingsChange}
-        onTargetCommit={handleTargetCommit}
-        source={source}
+        presentation={module.presentation}
+        category={module.category}
+        settings={
+          <ModuleSettings
+            module={module}
+            settings={settings}
+            onSettingsChange={handleSettingsChange}
+            onTargetCommit={handleTargetCommit}
+            source={source}
+          />
+        }
         onConvert={handleConvert}
       />
     </>

@@ -13,6 +13,10 @@ function audioFile(relativePath: string): AudioFile {
   }
 }
 
+/** What the shell computes from the graph and hands to start(); FLAC because that
+ *  is the codec SETTINGS asks for. */
+const TARGET = { moduleId: 'audio', extension: 'flac', label: 'FLAC' }
+
 const SETTINGS = {
   codec: 'flac' as const,
   quality: 'best' as const,
@@ -53,7 +57,7 @@ describe('ConversionController.start', () => {
       .mockRejectedValue(new DOMException('cancelled', 'AbortError'))
     const controller = new ConversionController(instantConverterFactory())
 
-    const started = await controller.start([audioFile('a.wav')], SETTINGS, 'audio')
+    const started = await controller.start([audioFile('a.wav')], SETTINGS, TARGET)
 
     expect(started).toBe(false)
     expect(controller.getSnapshot().scheduler).toBeNull()
@@ -65,13 +69,13 @@ describe('ConversionController.start', () => {
     const controller = new ConversionController(instantConverterFactory())
     const files = [audioFile('a.wav'), audioFile('b.wav')]
 
-    const started = await controller.start(files, SETTINGS, 'audio')
+    const started = await controller.start(files, SETTINGS, TARGET)
 
     expect(started).toBe(true)
     const snapshot = controller.getSnapshot()
     expect(snapshot.scheduler).not.toBeNull()
     expect(snapshot.destination?.mode).toBe('directory')
-    expect(snapshot.codecLabel).toBe('FLAC')
+    expect(snapshot.targetLabel).toBe('FLAC')
   })
 
   it('notifies subscribers as the underlying scheduler progresses through to completion', async () => {
@@ -82,7 +86,7 @@ describe('ConversionController.start', () => {
       notifications += 1
     })
 
-    await controller.start([audioFile('a.wav')], SETTINGS, 'audio')
+    await controller.start([audioFile('a.wav')], SETTINGS, TARGET)
     await vi.waitFor(() =>
       expect(controller.getSnapshot().scheduler?.isFinished).toBe(true),
     )
@@ -106,7 +110,7 @@ describe('ConversionController.start', () => {
     })
     const controller = new ConversionController(instantConverterFactory())
 
-    await controller.start([audioFile('a.wav'), audioFile('b.wav')], SETTINGS, 'audio')
+    await controller.start([audioFile('a.wav'), audioFile('b.wav')], SETTINGS, TARGET)
     await vi.waitFor(() =>
       expect(controller.getSnapshot().scheduler?.isFinished).toBe(true),
     )
@@ -130,7 +134,7 @@ describe('ConversionController.start', () => {
     const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake')
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click')
 
-    await controller.start([audioFile('a.wav'), audioFile('b.wav')], SETTINGS, 'audio')
+    await controller.start([audioFile('a.wav'), audioFile('b.wav')], SETTINGS, TARGET)
     await vi.waitFor(() => expect(resolvers.length).toBe(2))
     controller.cancel()
     resolvers.forEach((resolve) =>
@@ -163,7 +167,7 @@ describe('ConversionController.start', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click')
 
     // Run A: 2 files, zip mode (no directory picker configured).
-    await controller.start([audioFile('a1.wav'), audioFile('a2.wav')], SETTINGS, 'audio')
+    await controller.start([audioFile('a1.wav'), audioFile('a2.wav')], SETTINGS, TARGET)
     const schedulerA = controller.getSnapshot().scheduler
     await vi.waitFor(() => expect(resolvers.length).toBe(2))
     controller.cancel()
@@ -173,7 +177,7 @@ describe('ConversionController.start', () => {
     const startedB = await controller.start(
       [audioFile('b1.wav'), audioFile('b2.wav')],
       SETTINGS,
-      'audio',
+      TARGET,
     )
     expect(startedB).toBe(true)
     const schedulerB = controller.getSnapshot().scheduler
@@ -211,7 +215,7 @@ describe('ConversionController - finalized', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake')
     vi.spyOn(HTMLAnchorElement.prototype, 'click')
 
-    await controller.start([audioFile('a.wav')], SETTINGS, 'audio') // single-download mode
+    await controller.start([audioFile('a.wav')], SETTINGS, TARGET) // single-download mode
 
     let finalizedWhenFirstFinished: boolean | null = null
     controller.subscribe(() => {
@@ -241,7 +245,7 @@ describe('ConversionController.reset', () => {
   it('clears the snapshot back to empty', async () => {
     window.showDirectoryPicker = fakeDirectoryPicker()
     const controller = new ConversionController(instantConverterFactory())
-    await controller.start([audioFile('a.wav')], SETTINGS, 'audio')
+    await controller.start([audioFile('a.wav')], SETTINGS, TARGET)
     expect(controller.getSnapshot().scheduler).not.toBeNull()
 
     controller.reset()
@@ -266,7 +270,7 @@ describe('ConversionController.cancel after the batch has finished', () => {
     const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake')
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click')
 
-    await controller.start([audioFile('a.wav')], SETTINGS, 'audio')
+    await controller.start([audioFile('a.wav')], SETTINGS, TARGET)
     await vi.waitFor(() => expect(resolveConvert).toBeDefined())
     resolveConvert({ blob: new Blob(['x']), fileName: 'ignored' })
     await vi.waitFor(() =>
@@ -300,7 +304,7 @@ describe('ConversionController.cancel after the batch has finished', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake')
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click')
 
-    await controller.start([audioFile('a.wav')], SETTINGS, 'audio')
+    await controller.start([audioFile('a.wav')], SETTINGS, TARGET)
     const scheduler = controller.getSnapshot().scheduler
     expect(scheduler?.isFinished).toBe(false)
 

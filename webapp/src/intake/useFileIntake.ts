@@ -1,5 +1,5 @@
 import { useEffect, useSyncExternalStore } from 'react'
-import type { ConverterModule } from '../platform/module'
+import type { IntakeModule } from './FileIntakeStore'
 import { sharedIntakeStore } from './sharedIntakeStore'
 
 /**
@@ -13,7 +13,7 @@ import { sharedIntakeStore } from './sharedIntakeStore'
  * remount every conversion-route navigation causes; the effect below is what
  * carries those files into the new module (dropping the ones it can't accept).
  */
-export function useFileIntake(module: Pick<ConverterModule, 'accepts'>) {
+export function useFileIntake(module: IntakeModule) {
   const store = sharedIntakeStore(module)
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot)
 

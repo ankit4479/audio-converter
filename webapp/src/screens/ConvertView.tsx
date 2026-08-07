@@ -10,7 +10,7 @@ import { truncateMiddle } from './truncateMiddle'
 export interface ConvertViewProps {
   scheduler: BatchScheduler
   destination: OutputDestination
-  codecLabel: string
+  targetLabel: string
   /** True once the destination has actually finished finalizing (the zip has
    *  built and downloaded, the single file has downloaded, or the directory write
    *  - already synchronous by the time scheduler.isFinished flips - has settled).
@@ -24,15 +24,19 @@ export interface ConvertViewProps {
 export function ConvertView({
   scheduler,
   destination,
-  codecLabel,
+  targetLabel,
   finalized,
   onChange,
   onConvertMore,
 }: ConvertViewProps) {
   return (
     <div className="mx-auto max-w-[680px] space-y-5 p-6">
-      <FolderChip destination={destination} codecLabel={codecLabel} onChange={onChange} />
-      <ProgressBlock scheduler={scheduler} codecLabel={codecLabel} />
+      <FolderChip
+        destination={destination}
+        targetLabel={targetLabel}
+        onChange={onChange}
+      />
+      <ProgressBlock scheduler={scheduler} targetLabel={targetLabel} />
       {scheduler.isFinished && finalized && (
         <DoneCard
           scheduler={scheduler}
@@ -50,14 +54,14 @@ const DESTINATION_LABEL_MAX_CHARS = 56
 
 function FolderChip({
   destination,
-  codecLabel,
+  targetLabel,
   onChange,
 }: {
   destination: OutputDestination
-  codecLabel: string
+  targetLabel: string
   onChange: () => void
 }) {
-  const fullLabel = destination.destinationLabel(codecLabel)
+  const fullLabel = destination.destinationLabel(targetLabel)
   return (
     <div className="flex items-center gap-2 rounded-chip border border-border bg-surface p-3">
       <FolderIcon />
@@ -81,10 +85,10 @@ function FolderChip({
 // ConvertView.swift:48-68
 function ProgressBlock({
   scheduler,
-  codecLabel,
+  targetLabel,
 }: {
   scheduler: BatchScheduler
-  codecLabel: string
+  targetLabel: string
 }) {
   const finishedCount = scheduler.completedCount + scheduler.failedJobs.length
   const progress = scheduler.totalCount === 0 ? 0 : finishedCount / scheduler.totalCount
@@ -117,7 +121,7 @@ function ProgressBlock({
       </div>
       {currentFileName && (
         <p className="font-mono text-mono-xs text-text-secondary">
-          Converting: {currentFileName} to {codecLabel}
+          Converting: {currentFileName} to {targetLabel}
         </p>
       )}
     </div>

@@ -370,7 +370,13 @@ describe('BatchScheduler - default converter factory', () => {
         id,
         category,
         label: id,
+        presentation: {
+          item: { singular: 'file', plural: 'files' },
+          intakeHint: 'anything',
+          tracksDuration: false,
+        },
         accepts: () => true,
+        targetSettingKey: 'codec',
         inputFormats: [],
         outputFormats: [],
         settingsSchema: [],

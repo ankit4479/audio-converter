@@ -3,6 +3,14 @@ import { deduplicateAgainst, type AudioFile, type ScannedFile } from './audioFil
 import { totalDuration } from './duration'
 import { filterAndBuildAudioFiles } from './intake'
 
+/** All this store needs of a module: whether it accepts a file, and whether a
+ *  playing time is a meaningful thing to compute for these files at all (E2.1,
+ *  issue #31 - it isn't, for images). `presentation` is optional so the many tests
+ *  that hand in a bare { accepts } fake keep working; a module that omits it is
+ *  treated as one that does track duration, which is the pre-#31 behaviour. */
+export type IntakeModule = Pick<ConverterModule, 'accepts'> &
+  Partial<Pick<ConverterModule, 'presentation'>>
+
 export interface FileIntakeSnapshot {
   readonly files: readonly AudioFile[]
   readonly totalDuration: number
@@ -38,9 +46,9 @@ export class FileIntakeStore {
   /** Not readonly since E1.5 (issue #29): one store instance outlives the widget
    *  now (see sharedIntakeStore.ts), so which module gates intake can change
    *  under it when the user switches to a converter another module owns. */
-  private module: Pick<ConverterModule, 'accepts'>
+  private module: IntakeModule
 
-  constructor(module: Pick<ConverterModule, 'accepts'>) {
+  constructor(module: IntakeModule) {
     this.module = module
   }
 
@@ -78,7 +86,7 @@ export class FileIntakeStore {
    * every mount of the widget, and every same-module target change (mp3 to aac)
    * remounts it.
    */
-  setModule(module: Pick<ConverterModule, 'accepts'>): void {
+  setModule(module: IntakeModule): void {
     if (module === this.module) return
     this.module = module
 
@@ -123,7 +131,16 @@ export class FileIntakeStore {
    *  by a generation counter so a stale in-flight scan can't overwrite a newer one's
    *  result. */
   private recalculateDuration(): void {
+    // Bumped even when we skip the scan, so a scan already in flight for an older
+    // file list can't land afterwards and revive a duration for the new one.
     this.generation += 1
+    // Images have no playing time to sum (E2.1, issue #31). Skipping the scan
+    // rather than letting it run and return 0 avoids opening a Mediabunny parser
+    // per file for an answer that means nothing.
+    if (this.module.presentation && !this.module.presentation.tracksDuration) {
+      this.setSnapshot({ totalDuration: 0, isCalculatingDuration: false })
+      return
+    }
     const generation = this.generation
     this.setSnapshot({ isCalculatingDuration: true })
 

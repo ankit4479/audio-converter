@@ -12,7 +12,6 @@
  */
 import type { AudioFile } from '../intake/audioFile'
 import { requireModule } from '../platform/registry'
-import type { ConversionSettings } from './codec'
 import {
   decodeConversionError,
   isEncodedConversionError,
@@ -37,22 +36,27 @@ export interface BatchSnapshot {
   readonly isRunning: boolean
 }
 
-export interface JobConverter {
+/** Generic over the module's settings shape since E2.1 (issue #31): the scheduler
+ *  never reads a settings value, it only carries whatever the module it is running
+ *  handed it through to that module's engine. Typing it as the audio
+ *  ConversionSettings (as it was) meant no second module's settings could reach an
+ *  engine at all. */
+export interface JobConverter<TSettings = unknown> {
   convert(
     file: Blob,
     baseName: string,
-    settings: ConversionSettings,
+    settings: TSettings,
     options: { signal?: AbortSignal },
   ): Promise<ConvertResult>
   dispose(): void
 }
 
-export interface BatchSchedulerOptions {
+export interface BatchSchedulerOptions<TSettings = unknown> {
   concurrency?: number
   /** Which registered module's engine to run this batch on. Required unless
    *  createConverter is supplied (tests supply a fake instead). */
   moduleId?: string
-  createConverter?: () => JobConverter | Promise<JobConverter>
+  createConverter?: () => JobConverter<TSettings> | Promise<JobConverter<TSettings>>
   /** Called once a job settles (done or failed), before its worker slot picks up
    *  the next job. The batch's caller - not BatchScheduler - owns writing the
    *  result to disk (issue #10's OutputDestination); this is just the hook. */
@@ -65,13 +69,16 @@ export interface BatchSchedulerOptions {
 // module id was hardcoded to 'audio' here until E1.5 (issue #29) made the shell
 // able to switch modules; it is a required option now, since a scheduler that
 // guessed its own module would happily run a batch on the wrong engine.
-function converterFactoryFor(moduleId: string | undefined) {
+function converterFactoryFor<TSettings>(moduleId: string | undefined) {
   if (moduleId === undefined) {
     throw new Error(
       'BatchScheduler needs either a moduleId or a createConverter factory.',
     )
   }
-  return (): Promise<JobConverter> => requireModule(moduleId).loadEngine()
+  // A ConverterEngine<unknown> accepts a settings value of any shape, so it
+  // satisfies JobConverter<TSettings> for whatever the caller's TSettings is - the
+  // engine is the one thing that actually knows how to read it.
+  return (): Promise<JobConverter<TSettings>> => requireModule(moduleId).loadEngine()
 }
 
 // ConversionEngine.swift:32
@@ -119,7 +126,7 @@ function baseNameFor(relativePath: string): string {
   return lastDot <= 0 ? fileName : fileName.slice(0, lastDot)
 }
 
-export class BatchScheduler {
+export class BatchScheduler<TSettings = unknown> {
   private jobs: BatchJob[] = []
   private isRunning = false
   private startedAt: number | null = null
@@ -127,13 +134,14 @@ export class BatchScheduler {
   private readonly listeners = new Set<() => void>()
   private readonly controllers = new Map<string, AbortController>()
   private readonly concurrency: number
-  private readonly createConverter: () => JobConverter | Promise<JobConverter>
+  private readonly createConverter: () =>
+    JobConverter<TSettings> | Promise<JobConverter<TSettings>>
   private readonly onJobSettled?: (job: BatchJob) => void | Promise<void>
 
-  constructor(options: BatchSchedulerOptions = {}) {
+  constructor(options: BatchSchedulerOptions<TSettings> = {}) {
     this.concurrency = options.concurrency ?? defaultConcurrency()
     this.createConverter =
-      options.createConverter ?? converterFactoryFor(options.moduleId)
+      options.createConverter ?? converterFactoryFor<TSettings>(options.moduleId)
     this.onJobSettled = options.onJobSettled
   }
 
@@ -183,7 +191,7 @@ export class BatchScheduler {
     return formatDuration(perFile * remainingFiles)
   }
 
-  async run(files: readonly AudioFile[], settings: ConversionSettings): Promise<void> {
+  async run(files: readonly AudioFile[], settings: TSettings): Promise<void> {
     this.jobs = files.map((file) => ({
       id: crypto.randomUUID(),
       file,
@@ -234,8 +242,8 @@ export class BatchScheduler {
 
   private async runJob(
     index: number,
-    converter: JobConverter,
-    settings: ConversionSettings,
+    converter: JobConverter<TSettings>,
+    settings: TSettings,
   ): Promise<void> {
     if (this.cancelRequested) {
       this.setJob(index, { kind: 'failed', reason: 'cancelled before it started' })

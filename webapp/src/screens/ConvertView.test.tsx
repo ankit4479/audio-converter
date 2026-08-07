@@ -56,7 +56,7 @@ describe('ConvertView - folder chip (ConvertView.swift:28-46)', () => {
       <ConvertView
         scheduler={scheduler}
         destination={destination}
-        codecLabel="FLAC"
+        targetLabel="FLAC"
         finalized={true}
         onChange={() => {}}
         onConvertMore={() => {}}
@@ -81,7 +81,7 @@ describe('ConvertView - folder chip (ConvertView.swift:28-46)', () => {
       <ConvertView
         scheduler={scheduler}
         destination={destination}
-        codecLabel="FLAC"
+        targetLabel="FLAC"
         finalized={true}
         onChange={onChange}
         onConvertMore={() => {}}
@@ -101,7 +101,7 @@ describe('ConvertView - progress block (ConvertView.swift:48-68)', () => {
       <ConvertView
         scheduler={scheduler}
         destination={destination}
-        codecLabel="FLAC"
+        targetLabel="FLAC"
         finalized={true}
         onChange={() => {}}
         onConvertMore={() => {}}
@@ -120,7 +120,7 @@ describe('ConvertView - done card (ConvertView.swift:70-118)', () => {
       <ConvertView
         scheduler={scheduler}
         destination={destination}
-        codecLabel="FLAC"
+        targetLabel="FLAC"
         finalized={true}
         onChange={() => {}}
         onConvertMore={() => {}}
@@ -139,7 +139,7 @@ describe('ConvertView - done card (ConvertView.swift:70-118)', () => {
       <ConvertView
         scheduler={scheduler}
         destination={destination}
-        codecLabel="FLAC"
+        targetLabel="FLAC"
         finalized={true}
         onChange={() => {}}
         onConvertMore={() => {}}
@@ -163,7 +163,7 @@ describe('ConvertView - done card (ConvertView.swift:70-118)', () => {
       <ConvertView
         scheduler={scheduler}
         destination={destination}
-        codecLabel="FLAC"
+        targetLabel="FLAC"
         finalized={true}
         onChange={() => {}}
         onConvertMore={() => {}}
@@ -184,7 +184,7 @@ describe('ConvertView - done card (ConvertView.swift:70-118)', () => {
       <ConvertView
         scheduler={scheduler}
         destination={destination}
-        codecLabel="FLAC"
+        targetLabel="FLAC"
         finalized={true}
         onChange={() => {}}
         onConvertMore={onConvertMore}
@@ -203,7 +203,7 @@ describe('ConvertView - done card (ConvertView.swift:70-118)', () => {
       <ConvertView
         scheduler={scheduler}
         destination={destination}
-        codecLabel="FLAC"
+        targetLabel="FLAC"
         finalized={true}
         onChange={() => {}}
         onConvertMore={() => {}}

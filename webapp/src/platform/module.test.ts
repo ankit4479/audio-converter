@@ -45,7 +45,13 @@ describe('ConverterModule', () => {
       id: 'fake',
       category: 'audio',
       label: 'Fake',
+      presentation: {
+        item: { singular: 'file', plural: 'files' },
+        intakeHint: 'anything',
+        tracksDuration: false,
+      },
       accepts: (f) => f.name.endsWith('.mp3'),
+      targetSettingKey: 'format',
       inputFormats: ['mp3'],
       outputFormats: ['wav'],
       settingsSchema: [],

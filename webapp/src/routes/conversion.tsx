@@ -1,5 +1,4 @@
 import { useLocation } from 'react-router'
-import type { CodecId } from '../engine/codec'
 import { ConverterShell } from '../platform/ConverterShell'
 import { edgeLabel, slugToEdge } from '../platform/graph'
 
@@ -26,16 +25,15 @@ export default function ConversionRoute() {
   // fail loudly on the widget rather than convert to the wrong format silently.
   if (!edge) throw new Error(`No conversion for path "${pathname}"`)
 
-  // graph.ts's FormatId is a plain string (it also labels not-yet-encodable
-  // codecs), but edge.to specifically can only be one of AUDIO_ENCODABLE_TARGETS
-  // - a real CodecId - since AUDIO_EDGES only ever targets that set.
-  const target = edge.to as CodecId
+  // Handed on as the graph's own FormatId. It was narrowed to an audio CodecId here
+  // until E2.1 (issue #31): edge.to is 'webp' or 'avif' on an image edge, so that cast
+  // now asserts something false, and the shell types the target as a FormatId anyway.
   return (
     <ConverterShell
       moduleId={edge.moduleId}
       heading={`${edgeLabel(edge.from, edge.to)} Converter`}
       source={edge.from}
-      target={target}
+      target={edge.to}
     />
   )
 }

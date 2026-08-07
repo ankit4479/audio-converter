@@ -4,10 +4,14 @@ import { allEdges, edgeToSlug } from './graph'
 import { buildPaletteIndex } from './commandPaletteIndex'
 
 describe('buildPaletteIndex', () => {
-  it('has one entry per graph edge, all in the audio category', () => {
+  it('has one entry per graph edge, tagged with that edge’s own category', () => {
     const index = buildPaletteIndex()
     expect(index.length).toBe(allEdges().length)
-    expect(index.every((entry) => entry.category === 'audio')).toBe(true)
+    // Both live modules are registered by the import above, so both categories show
+    // up - a palette entry carries the category of the edge it came from.
+    expect(new Set(index.map((entry) => entry.category))).toEqual(
+      new Set(['audio', 'image']),
+    )
   })
 
   it('labels an entry as "<from> to <to>" and links to its edge slug', () => {

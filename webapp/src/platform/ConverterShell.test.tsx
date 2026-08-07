@@ -6,9 +6,11 @@ import {
   _resetForTests as resetIntake,
 } from '../intake/sharedIntakeStore'
 import { audioModule } from '../modules/audio'
+import { imageModule } from '../modules/image'
 import ConversionRoute from '../routes/conversion'
 import HubRoute from '../routes/hub'
 import { ConversionController } from '../screens/ConversionController'
+import { liveCategories } from './converterTargets'
 import { allEdges, edgeToSlug, hubPath } from './graph'
 import { register, _resetForTests as resetRegistry } from './registry'
 import { _resetForTests as resetSettings } from './sharedSettings'
@@ -18,6 +20,7 @@ beforeEach(() => {
   resetIntake()
   resetSettings()
   register(audioModule)
+  register(imageModule)
 })
 
 /**
@@ -31,7 +34,11 @@ beforeEach(() => {
 function renderAt(path: string) {
   const router = createMemoryRouter(
     [
-      { path: hubPath('audio'), element: <HubRoute /> },
+      // Every live category's hub, not just audio's - E2.1 (issue #31) added a second.
+      ...liveCategories().map((category) => ({
+        path: hubPath(category),
+        element: <HubRoute />,
+      })),
       ...allEdges().map((edge) => ({
         path: `/${edgeToSlug(edge.from, edge.to)}`,
         element: <ConversionRoute />,
@@ -281,5 +288,70 @@ describe('ConverterShell - engine lifecycle', () => {
 
     expect(cancel).toHaveBeenCalledTimes(1)
     cancel.mockRestore()
+  })
+})
+
+// E2.1 (issue #31): a second real module exists, so the shell's module-driven paths
+// are exercised against one rather than only against fakes.
+describe('ConverterShell - a second module', () => {
+  it('drives an image conversion page with the image module’s own words and targets', () => {
+    renderAt('/png-to-webp')
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'PNG to WebP Converter' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Drag images or folders here')).toBeInTheDocument()
+    expect(
+      screen.getByText('PNG, JPG, WebP, and AVIF. Mixed formats are fine.'),
+    ).toBeInTheDocument()
+    const target = screen.getByLabelText<HTMLSelectElement>('Convert to')
+    expect(target).toHaveValue('webp')
+    expect([...target.options].map((o) => o.value).sort()).toEqual([
+      'avif',
+      'jpg',
+      'webp',
+    ])
+  })
+
+  it('renders the image settings from its schema, with no audio controls anywhere', () => {
+    renderAt('/png-to-webp')
+    // Quality comes from the schema through the shared panel.
+    expect(screen.getByLabelText('Quality')).toHaveAttribute('type', 'range')
+    // None of audio's bespoke panel leaks in.
+    expect(screen.queryByText('Advanced settings')).toBeNull()
+    expect(screen.queryByText('Song info and cover art')).toBeNull()
+    expect(screen.queryByText('Sample rate')).toBeNull()
+  })
+
+  it('keeps audio pages on the audio panel, unchanged', () => {
+    renderAt('/wav-to-mp3')
+    expect(screen.getByText('Drag songs or folders here')).toBeInTheDocument()
+    expect(screen.getByText('Advanced settings')).toBeInTheDocument()
+    // Audio has a Quality control of its own, but it is its bespoke <select> of
+    // named tiers - not a schema-driven slider, which is what would mean the generic
+    // panel had taken over.
+    expect(screen.queryByRole('slider')).toBeNull()
+    expect(screen.getByLabelText('Quality').tagName).toBe('SELECT')
+  })
+
+  it('navigates between image conversions the same way audio does', () => {
+    const view = renderAt('/png-to-webp')
+    pickTarget('avif')
+    expect(view.path()).toBe('/png-to-avif')
+    expect(screen.getByLabelText('Convert to')).toHaveValue('avif')
+  })
+
+  it('offers the whole image category on the image hub, which has no source to exclude', () => {
+    renderAt(hubPath('image'))
+    expect(
+      screen.getByRole('heading', { level: 1, name: 'Image Converter' }),
+    ).toBeInTheDocument()
+    const target = screen.getByLabelText<HTMLSelectElement>('Convert to')
+    expect([...target.options].map((o) => o.value).sort()).toEqual([
+      'avif',
+      'jpg',
+      'png',
+      'webp',
+    ])
   })
 })
