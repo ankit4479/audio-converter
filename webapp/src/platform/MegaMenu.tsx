@@ -1,6 +1,6 @@
 /**
  * Global mega-menu (E1.2, issue #26): the FreeConvert-style top nav, present on
- * every page via LandingPage's SiteHeader. Generated entirely from the registry
+ * every page via SiteChrome's SiteHeader. Generated entirely from the registry
  * and graph - adding a module/edge grows the menu with no change here. A
  * category only gets a column once it has both a registered module (registry.
  * byCategory) and at least one real conversion (graph.categoriesWithConversions/
@@ -9,13 +9,13 @@
  */
 import { NavigationMenu } from 'radix-ui'
 import { Link } from 'react-router'
-import { byCategory } from './registry'
+import { liveCategories } from './converterTargets'
 import type { CategoryId } from './module'
 import {
-  categoriesWithConversions,
   edgesForCategory,
   edgeToSlug,
   formatNode,
+  hubPath,
   type ConversionEdge,
 } from './graph'
 
@@ -63,14 +63,12 @@ function groupByFromFormat(edges: readonly ConversionEdge[]): FormatGroup[] {
 /** Exported for MegaMenuDrawer (the mobile counterpart) so both read the exact
  *  same category list rather than each re-deriving it. */
 export function menuCategories(): MenuCategory[] {
-  return categoriesWithConversions()
-    .filter((category) => byCategory(category).length > 0)
-    .map((category) => ({
-      id: category,
-      label: CATEGORY_LABELS[category],
-      hubHref: `/${category}-converter`,
-      groups: groupByFromFormat(edgesForCategory(category)),
-    }))
+  return liveCategories().map((category) => ({
+    id: category,
+    label: CATEGORY_LABELS[category],
+    hubHref: hubPath(category),
+    groups: groupByFromFormat(edgesForCategory(category)),
+  }))
 }
 
 export function MegaMenu() {

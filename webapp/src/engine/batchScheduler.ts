@@ -49,6 +49,9 @@ export interface JobConverter {
 
 export interface BatchSchedulerOptions {
   concurrency?: number
+  /** Which registered module's engine to run this batch on. Required unless
+   *  createConverter is supplied (tests supply a fake instead). */
+  moduleId?: string
   createConverter?: () => JobConverter | Promise<JobConverter>
   /** Called once a job settles (done or failed), before its worker slot picks up
    *  the next job. The batch's caller - not BatchScheduler - owns writing the
@@ -56,14 +59,19 @@ export interface BatchSchedulerOptions {
   onJobSettled?: (job: BatchJob) => void | Promise<void>
 }
 
-// E0.4 (issue #24): the audio engine is now reached only through the registered
+// E0.4 (issue #24): the engine is reached only through the registered
 // ConverterModule, never by importing engine/converter.ts's Converter directly -
 // the same abstraction boundary #23 declared, now actually load-bearing. The
-// module id is hardcoded here (rather than threaded in as an option) because
-// this scheduler is still audio-only; a later multi-module issue is what would
-// turn this into a parameter.
-async function defaultConverterFactory(): Promise<JobConverter> {
-  return requireModule('audio').loadEngine()
+// module id was hardcoded to 'audio' here until E1.5 (issue #29) made the shell
+// able to switch modules; it is a required option now, since a scheduler that
+// guessed its own module would happily run a batch on the wrong engine.
+function converterFactoryFor(moduleId: string | undefined) {
+  if (moduleId === undefined) {
+    throw new Error(
+      'BatchScheduler needs either a moduleId or a createConverter factory.',
+    )
+  }
+  return (): Promise<JobConverter> => requireModule(moduleId).loadEngine()
 }
 
 // ConversionEngine.swift:32
@@ -124,7 +132,8 @@ export class BatchScheduler {
 
   constructor(options: BatchSchedulerOptions = {}) {
     this.concurrency = options.concurrency ?? defaultConcurrency()
-    this.createConverter = options.createConverter ?? defaultConverterFactory
+    this.createConverter =
+      options.createConverter ?? converterFactoryFor(options.moduleId)
     this.onJobSettled = options.onJobSettled
   }
 

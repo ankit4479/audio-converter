@@ -5,23 +5,24 @@
  * routes/home.tsx renders it directly rather than through ClientOnlyWidget. It
  * prerenders for real, the same way any other content page does.
  *
- * Reuses SiteHeader/PrivacySection/HowItWorksSection/SiteFooter from
- * screens/LandingPage.tsx verbatim - only the hero, search, category grid, and
- * popular strip are new. The inline search and the Cmd+K palette (#27) share the
- * exact same index (commandPaletteIndex.ts) and cmdk fuzzy engine; this is just a
- * second place to mount that engine, not a second implementation of it.
+ * Reuses SiteHeader/PrivacySection/HowItWorksSection/SiteFooter from SiteChrome
+ * verbatim - only the hero, search, selector, category grid, and popular strip are
+ * new. The inline search and the Cmd+K palette (#27) share the exact same index
+ * (commandPaletteIndex.ts) and cmdk fuzzy engine; this is just a second place to
+ * mount that engine, not a second implementation of it.
+ *
+ * Since E1.5 (issue #29) this is the only page that still pitches: the hub and
+ * per-conversion pages show their tool straight away, so the hero, ConversionDemo,
+ * privacy, and how-it-works blocks all live here and nowhere else.
  */
 import { useMemo, useState } from 'react'
 import { Command } from 'cmdk'
 import { Link, useNavigate } from 'react-router'
-import {
-  HowItWorksSection,
-  PrivacySection,
-  SiteFooter,
-  SiteHeader,
-} from '../screens/LandingPage'
+import { ConversionDemo } from '../screens/ConversionDemo'
 import { buildPaletteIndex, type PaletteEntry } from './commandPaletteIndex'
-import { allEdges, edgeLabel, edgesForCategory, edgeToSlug } from './graph'
+import { ConverterSelect } from './ConverterSelect'
+import { allEdges, edgeLabel, edgesForCategory, edgeToSlug, hubPath } from './graph'
+import { HowItWorksSection, PrivacySection, SiteFooter, SiteHeader } from './SiteChrome'
 import { CATEGORY_LABELS } from './MegaMenu'
 import type { CategoryId } from './module'
 
@@ -74,6 +75,12 @@ function HomeHero() {
       </p>
       <div className="mx-auto mt-6 max-w-[480px]">
         <HomeSearch />
+      </div>
+      <div className="mx-auto mt-4 max-w-[480px]">
+        <ConverterSelect />
+      </div>
+      <div className="mt-8">
+        <ConversionDemo />
       </div>
     </div>
   )
@@ -146,7 +153,7 @@ function CategoryGrid() {
           return (
             <Link
               key={category}
-              to={`/${category}-converter`}
+              to={hubPath(category)}
               className="rounded-card border border-border p-4 text-center hover:border-accent"
             >
               <p className="font-semibold text-text-primary">{label}</p>

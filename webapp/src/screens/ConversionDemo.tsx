@@ -36,7 +36,14 @@ export function ConversionDemo() {
   const reduceMotion = useReducedMotion()
 
   return (
-    <div className="flex items-center justify-center gap-4 sm:gap-6">
+    // Labelled as one image rather than left as three unrelated fragments: the
+    // meaning is in the arrangement (in, through, out), which a screen reader can't
+    // get from reading "FLAC" and "MP3" in sequence.
+    <div
+      role="img"
+      aria-label="A FLAC file being converted into an MP3, entirely on this device"
+      className="flex items-center justify-center gap-4 sm:gap-6"
+    >
       <FileChip label="FLAC" />
       <div className="relative h-px w-16 flex-1 max-w-24 bg-border sm:w-24">
         <span

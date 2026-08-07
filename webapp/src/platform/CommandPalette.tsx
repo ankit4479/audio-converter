@@ -90,7 +90,13 @@ export function CommandPalette() {
               {recentEntries.map((entry) => (
                 <Command.Item
                   key={`recent-${entry.slug}`}
-                  value={`recent ${entry.label}`}
+                  // The slug, not `recent <label>`: cmdk needs a value distinct
+                  // from the same conversion's entry in its category group below,
+                  // but it also scores the query against `value`, so the literal
+                  // word "recent" in there would make typing "rec" match every
+                  // recent item. The slug is both unique and a real thing to
+                  // search for.
+                  value={entry.slug}
                   keywords={[...entry.keywords]}
                   onSelect={() => selectEntry(entry)}
                   className="cursor-pointer rounded-chip px-3 py-2 text-body-sm text-text-primary aria-selected:bg-surface-page"

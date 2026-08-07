@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS: SetupSettings = {
 function renderSetup(overrides: Partial<Parameters<typeof SetupView>[0]> = {}) {
   const store = new FileIntakeStore(audioModule)
   const onSettingsChange = vi.fn()
+  const onTargetCommit = vi.fn()
   const onConvert = vi.fn()
   const props = {
     store,
@@ -23,11 +24,12 @@ function renderSetup(overrides: Partial<Parameters<typeof SetupView>[0]> = {}) {
     isCalculatingDuration: false,
     settings: DEFAULT_SETTINGS,
     onSettingsChange,
+    onTargetCommit,
     onConvert,
     ...overrides,
   }
   const view = render(<SetupView {...props} />)
-  return { ...view, store, onSettingsChange, onConvert, props }
+  return { ...view, store, onSettingsChange, onTargetCommit, onConvert, props }
 }
 
 function mockMatchMedia(matches: boolean) {

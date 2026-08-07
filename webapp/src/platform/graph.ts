@@ -122,6 +122,24 @@ export function relatedConversions(id: FormatId): readonly FormatId[] {
   return [...related]
 }
 
+/** Path of a category's hub page, e.g. hubPath('audio') -> '/audio-converter'.
+ *  The literal was being spelled out separately in routes.ts,
+ *  react-router.config.ts, MegaMenu, and HomePage; all four now call this, so a
+ *  hub link can't point somewhere the route table doesn't generate. */
+export function hubPath(category: CategoryId): string {
+  return `/${category}-converter`
+}
+
+/** Inverse of hubPath, for the single hub route component recovering which
+ *  category it is rendering from the URL (the same trick routes/conversion.tsx
+ *  uses with slugToEdge - routes.ts generates one literal path per category, so
+ *  there is no route param to read). Returns undefined for anything that isn't a
+ *  live category's hub path. */
+export function categoryForHubPath(path: string): CategoryId | undefined {
+  const slug = path.replace(/^\/+|\/+$/g, '')
+  return categoriesWithConversions().find((category) => `${category}-converter` === slug)
+}
+
 /** URL slug for one edge, e.g. edgeToSlug('wav', 'mp3') -> 'wav-to-mp3'. Used to
  *  generate and to parse specific-conversion routes (Expansion 1). */
 export function edgeToSlug(from: FormatId, to: FormatId): string {

@@ -7,12 +7,20 @@ export interface FileIntakeSnapshot {
   readonly files: readonly AudioFile[]
   readonly totalDuration: number
   readonly isCalculatingDuration: boolean
+  /** Files the most recent setModule() had to let go of, because the module now
+   *  driving the shell doesn't accept them (E1.5, issue #29 - swapping from the
+   *  audio converter to, say, an image one). Carried in the snapshot rather than
+   *  returned from setModule() so the shell can tell the user about them through
+   *  the same useSyncExternalStore subscription it already has, and cleared by
+   *  acknowledgeDroppedFiles() once it has. */
+  readonly droppedOnModuleChange: readonly AudioFile[]
 }
 
 const EMPTY_SNAPSHOT: FileIntakeSnapshot = {
   files: [],
   totalDuration: 0,
   isCalculatingDuration: false,
+  droppedOnModuleChange: [],
 }
 
 /**
@@ -27,7 +35,10 @@ export class FileIntakeStore {
   private snapshot: FileIntakeSnapshot = EMPTY_SNAPSHOT
   private generation = 0
   private readonly listeners = new Set<() => void>()
-  private readonly module: Pick<ConverterModule, 'accepts'>
+  /** Not readonly since E1.5 (issue #29): one store instance outlives the widget
+   *  now (see sharedIntakeStore.ts), so which module gates intake can change
+   *  under it when the user switches to a converter another module owns. */
+  private module: Pick<ConverterModule, 'accepts'>
 
   constructor(module: Pick<ConverterModule, 'accepts'>) {
     this.module = module
@@ -54,6 +65,50 @@ export class FileIntakeStore {
 
     this.setSnapshot({ files: [...this.snapshot.files, ...newFiles] })
     this.recalculateDuration()
+  }
+
+  /**
+   * Switches which module's accepts() gates this store (E1.5, issue #29). Files
+   * already added are carried forward where the new module accepts them and
+   * dropped where it doesn't - the dropped ones land in
+   * snapshot.droppedOnModuleChange so the shell can say so, rather than files
+   * vanishing from the list with no explanation.
+   *
+   * A no-op for the same module, which is the common case: this is called on
+   * every mount of the widget, and every same-module target change (mp3 to aac)
+   * remounts it.
+   */
+  setModule(module: Pick<ConverterModule, 'accepts'>): void {
+    if (module === this.module) return
+    this.module = module
+
+    const kept: AudioFile[] = []
+    const dropped: AudioFile[] = []
+    for (const file of this.snapshot.files) {
+      ;(module.accepts(file.file) ? kept : dropped).push(file)
+    }
+    if (dropped.length === 0) {
+      // Nothing to report for this swap - but an earlier swap's notice must not
+      // survive into it, or the shell would keep rendering "N files were removed:
+      // the <new module> converter can't read them" about files a different module
+      // rejected (and, once the list is empty, about files that are no longer in
+      // it at all). No recalculateDuration: the list itself didn't change.
+      this.acknowledgeDroppedFiles()
+      return
+    }
+
+    this.setSnapshot({ files: kept, droppedOnModuleChange: dropped })
+    // Duration is a property of the file list, so a shorter list needs a fresh
+    // total; recalculateDuration()'s generation guard also invalidates any scan
+    // still in flight for the pre-swap list.
+    this.recalculateDuration()
+  }
+
+  /** Dismisses the "these files were dropped" notice (see
+   *  snapshot.droppedOnModuleChange). */
+  acknowledgeDroppedFiles(): void {
+    if (this.snapshot.droppedOnModuleChange.length === 0) return
+    this.setSnapshot({ droppedOnModuleChange: [] })
   }
 
   /** Ported from AppState.clearFiles (AppState.swift:62-67). */

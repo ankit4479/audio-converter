@@ -53,7 +53,7 @@ describe('ConversionController.start', () => {
       .mockRejectedValue(new DOMException('cancelled', 'AbortError'))
     const controller = new ConversionController(instantConverterFactory())
 
-    const started = await controller.start([audioFile('a.wav')], SETTINGS)
+    const started = await controller.start([audioFile('a.wav')], SETTINGS, 'audio')
 
     expect(started).toBe(false)
     expect(controller.getSnapshot().scheduler).toBeNull()
@@ -65,7 +65,7 @@ describe('ConversionController.start', () => {
     const controller = new ConversionController(instantConverterFactory())
     const files = [audioFile('a.wav'), audioFile('b.wav')]
 
-    const started = await controller.start(files, SETTINGS)
+    const started = await controller.start(files, SETTINGS, 'audio')
 
     expect(started).toBe(true)
     const snapshot = controller.getSnapshot()
@@ -82,7 +82,7 @@ describe('ConversionController.start', () => {
       notifications += 1
     })
 
-    await controller.start([audioFile('a.wav')], SETTINGS)
+    await controller.start([audioFile('a.wav')], SETTINGS, 'audio')
     await vi.waitFor(() =>
       expect(controller.getSnapshot().scheduler?.isFinished).toBe(true),
     )
@@ -106,7 +106,7 @@ describe('ConversionController.start', () => {
     })
     const controller = new ConversionController(instantConverterFactory())
 
-    await controller.start([audioFile('a.wav'), audioFile('b.wav')], SETTINGS)
+    await controller.start([audioFile('a.wav'), audioFile('b.wav')], SETTINGS, 'audio')
     await vi.waitFor(() =>
       expect(controller.getSnapshot().scheduler?.isFinished).toBe(true),
     )
@@ -130,7 +130,7 @@ describe('ConversionController.start', () => {
     const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake')
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click')
 
-    await controller.start([audioFile('a.wav'), audioFile('b.wav')], SETTINGS)
+    await controller.start([audioFile('a.wav'), audioFile('b.wav')], SETTINGS, 'audio')
     await vi.waitFor(() => expect(resolvers.length).toBe(2))
     controller.cancel()
     resolvers.forEach((resolve) =>
@@ -163,7 +163,7 @@ describe('ConversionController.start', () => {
     const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click')
 
     // Run A: 2 files, zip mode (no directory picker configured).
-    await controller.start([audioFile('a1.wav'), audioFile('a2.wav')], SETTINGS)
+    await controller.start([audioFile('a1.wav'), audioFile('a2.wav')], SETTINGS, 'audio')
     const schedulerA = controller.getSnapshot().scheduler
     await vi.waitFor(() => expect(resolvers.length).toBe(2))
     controller.cancel()
@@ -173,6 +173,7 @@ describe('ConversionController.start', () => {
     const startedB = await controller.start(
       [audioFile('b1.wav'), audioFile('b2.wav')],
       SETTINGS,
+      'audio',
     )
     expect(startedB).toBe(true)
     const schedulerB = controller.getSnapshot().scheduler
@@ -210,7 +211,7 @@ describe('ConversionController - finalized', () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake')
     vi.spyOn(HTMLAnchorElement.prototype, 'click')
 
-    await controller.start([audioFile('a.wav')], SETTINGS) // single-download mode
+    await controller.start([audioFile('a.wav')], SETTINGS, 'audio') // single-download mode
 
     let finalizedWhenFirstFinished: boolean | null = null
     controller.subscribe(() => {
@@ -240,12 +241,75 @@ describe('ConversionController.reset', () => {
   it('clears the snapshot back to empty', async () => {
     window.showDirectoryPicker = fakeDirectoryPicker()
     const controller = new ConversionController(instantConverterFactory())
-    await controller.start([audioFile('a.wav')], SETTINGS)
+    await controller.start([audioFile('a.wav')], SETTINGS, 'audio')
     expect(controller.getSnapshot().scheduler).not.toBeNull()
 
     controller.reset()
 
     expect(controller.getSnapshot().scheduler).toBeNull()
     expect(controller.getSnapshot().destination).toBeNull()
+  })
+})
+
+// E1.5 (issue #29) wires cancel() to the converter widget unmounting, so any
+// navigation can now land in the window between a batch finishing and its
+// finish() callback running. Cancelling there must not throw away a completed
+// conversion's output.
+describe('ConversionController.cancel after the batch has finished', () => {
+  it('leaves a completed batch alone, so navigating away as it finishes still produces the download', async () => {
+    let resolveConvert!: (r: { blob: Blob; fileName: string }) => void
+    const stallingConverter: () => JobConverter = () => ({
+      convert: () => new Promise((resolve) => (resolveConvert = resolve)),
+      dispose: () => {},
+    })
+    const controller = new ConversionController(stallingConverter)
+    const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake')
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click')
+
+    await controller.start([audioFile('a.wav')], SETTINGS, 'audio')
+    await vi.waitFor(() => expect(resolveConvert).toBeDefined())
+    resolveConvert({ blob: new Blob(['x']), fileName: 'ignored' })
+    await vi.waitFor(() =>
+      expect(controller.getSnapshot().scheduler?.isFinished).toBe(true),
+    )
+
+    // The unmount cancel, arriving after the work is done.
+    controller.cancel()
+
+    await vi.waitFor(() => expect(controller.getSnapshot().finalized).toBe(true))
+    expect(clickSpy).toHaveBeenCalledTimes(1)
+    expect(controller.getSnapshot().finishError).toBeNull()
+
+    createUrl.mockRestore()
+    clickSpy.mockRestore()
+  })
+
+  it('still cancels a batch that is genuinely in flight', async () => {
+    // Honors the abort signal the way engine/converter.ts does, so cancellation is
+    // observable end to end rather than leaving a promise hanging forever.
+    const stallingConverter: () => JobConverter = () => ({
+      convert: (_file, _baseName, _settings, options) =>
+        new Promise((_resolve, reject) => {
+          options.signal?.addEventListener('abort', () =>
+            reject(new Error('conversion was canceled')),
+          )
+        }),
+      dispose: () => {},
+    })
+    const controller = new ConversionController(stallingConverter)
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fake')
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click')
+
+    await controller.start([audioFile('a.wav')], SETTINGS, 'audio')
+    const scheduler = controller.getSnapshot().scheduler
+    expect(scheduler?.isFinished).toBe(false)
+
+    controller.cancel()
+
+    // getSnapshot() is the public read of the same flag; isRunning itself is private.
+    await vi.waitFor(() => expect(scheduler?.getSnapshot().isRunning).toBe(false))
+    expect(scheduler?.failedJobs).toHaveLength(1)
+    expect(clickSpy).not.toHaveBeenCalled()
+    clickSpy.mockRestore()
   })
 })

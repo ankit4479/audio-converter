@@ -19,6 +19,7 @@ import {
   type QualityTier,
   type SampleRate,
 } from '../engine/codec'
+import { SelectChevron } from '../components/SelectChevron'
 import { detectAudioEncoders, type DetectionResult } from '../engine/webcodecs'
 import type { AudioFile } from '../intake/audioFile'
 import type { FileIntakeStore } from '../intake/FileIntakeStore'
@@ -43,6 +44,19 @@ export interface SetupViewProps {
   isCalculatingDuration: boolean
   settings: SetupSettings
   onSettingsChange: (settings: SetupSettings) => void
+  /** Called once the user's output-format pick is deliberate rather than in
+   *  progress (see FormatPickerSection). The shell turns it into a navigation
+   *  where that conversion has a page of its own (E1.5, issue #29) and ignores it
+   *  otherwise, so this view never has to know which case it is in. Every pick,
+   *  committed or not, still goes through onSettingsChange, so the visible value
+   *  always follows the user. */
+  onTargetCommit: (codec: CodecId) => void
+  /** The source format this page is about, when it is about one specific
+   *  conversion. Left out of the "Convert to" list: the graph has no X-to-X edge
+   *  (graph.ts's AUDIO_EDGES filters `to !== from`), so there is no page for it and
+   *  picking it could only ever be a settings change that leaves the URL and the h1
+   *  claiming a different output than the widget would produce. */
+  source?: string
   onConvert: () => void
 }
 
@@ -64,6 +78,8 @@ export function SetupView(props: SetupViewProps) {
       <FormatPickerSection
         settings={props.settings}
         onSettingsChange={props.onSettingsChange}
+        onTargetCommit={props.onTargetCommit}
+        source={props.source}
       />
       <AdvancedSettingsSection
         settings={props.settings}
@@ -207,9 +223,13 @@ function FilesDisclosureSection({ files }: { files: readonly AudioFile[] }) {
 function FormatPickerSection({
   settings,
   onSettingsChange,
+  onTargetCommit,
+  source,
 }: {
   settings: SetupSettings
   onSettingsChange: (settings: SetupSettings) => void
+  onTargetCommit: (codec: CodecId) => void
+  source?: string
 }) {
   const [detection, setDetection] = useState<DetectionResult>({
     aac: 'available',
@@ -225,27 +245,46 @@ function FormatPickerSection({
   // anyone just trying to pick a format that works; a browser-support note lives in
   // the README/docs for anyone who goes looking for a missing format.
   const isSupported = (id: CodecId) => !getCodecAvailabilityInfo(id, detection).disabled
+  // A conversion page's own source format is never offered as its target: there is
+  // no X-to-X edge in the graph, so committing it couldn't navigate anywhere and
+  // would leave the URL/h1 ("WAV to MP3") disagreeing with what the widget would
+  // actually produce. Hub pages pass no source, so they still offer every format.
+  const isOffered = (id: CodecId) => id !== source && isSupported(id)
   const commonCodecs = CODEC_IDS.filter(
-    (id) => CODECS[id].group === 'common' && isSupported(id),
+    (id) => CODECS[id].group === 'common' && isOffered(id),
   )
   const moreCodecs = CODEC_IDS.filter(
-    (id) => CODECS[id].group === 'more' && isSupported(id),
+    (id) => CODECS[id].group === 'more' && isOffered(id),
   )
   const codec = CODECS[settings.codec]
   const selectId = useId()
 
+  // On Windows/Linux Chrome and Firefox a closed native <select> fires `change` for
+  // every option the arrow keys pass over. Since committing a target navigates
+  // (#29), doing it on `change` would send a keyboard user to the very first
+  // neighbouring format and tear the focused control out from under them before
+  // they reached the one they wanted - they could never reach a non-adjacent
+  // format at all. So `change` only ever updates the visible value, and the commit
+  // waits for a signal that the pick is finished: a pointer selection, Enter, or
+  // focus leaving the control. Mouse users still get the immediate navigation they
+  // had, because the pointer flag is set before their `change` arrives.
+  const pickedWithPointer = useRef(false)
+
   // Safety net: if the previously-selected codec ever drops out of the supported
   // list (e.g. a runtime-detected one on a browser where support changes), fall back
   // to the first still-available option rather than leaving a hidden value selected.
+  // Deliberately onSettingsChange and not onTargetCommit: this fires on mount, and
+  // routing it through the navigating path would silently redirect a visitor who
+  // opened a page for a format their browser can't encode.
   // Recomputes support from `detection` directly rather than closing over the
   // commonCodecs/moreCodecs above, so the effect's own dependencies stay accurate.
   useEffect(() => {
     if (!getCodecAvailabilityInfo(settings.codec, detection).disabled) return
     const fallback = CODEC_IDS.find(
-      (id) => !getCodecAvailabilityInfo(id, detection).disabled,
+      (id) => id !== source && !getCodecAvailabilityInfo(id, detection).disabled,
     )
     if (fallback) onSettingsChange({ ...settings, codec: fallback })
-  }, [settings, detection, onSettingsChange])
+  }, [settings, detection, onSettingsChange, source])
 
   return (
     <div className="space-y-1.5">
@@ -257,9 +296,24 @@ function FormatPickerSection({
           id={selectId}
           className="w-full appearance-none rounded-chip border border-border bg-surface p-2 pr-9 text-text-primary"
           value={settings.codec}
-          onChange={(e) =>
-            onSettingsChange({ ...settings, codec: e.target.value as CodecId })
-          }
+          onPointerDown={() => {
+            pickedWithPointer.current = true
+          }}
+          onKeyDown={(e) => {
+            // Enter closes the dropdown, so it is the keyboard's "this is my
+            // choice"; any other key is still browsing.
+            if (e.key === 'Enter') onTargetCommit(e.currentTarget.value as CodecId)
+            else pickedWithPointer.current = false
+          }}
+          onBlur={(e) => onTargetCommit(e.target.value as CodecId)}
+          onChange={(e) => {
+            const picked = e.target.value as CodecId
+            onSettingsChange({ ...settings, codec: picked })
+            if (pickedWithPointer.current) {
+              pickedWithPointer.current = false
+              onTargetCommit(picked)
+            }
+          }}
         >
           <optgroup label="Common">
             {commonCodecs.map((id) => (
@@ -405,30 +459,6 @@ function LabeledSelect<T extends string>({
         <SelectChevron />
       </div>
     </div>
-  )
-}
-
-// Native <select> arrows render however the browser's own UA styling decides to,
-// which doesn't line up with this design system - appearance-none above strips
-// that, and this SVG replaces it with one we control the size and alignment of.
-function SelectChevron() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 24 24"
-      fill="none"
-      className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-text-secondary"
-      aria-hidden="true"
-    >
-      <path
-        d="M5 9l7 7 7-7"
-        stroke="currentColor"
-        strokeWidth="2.2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
   )
 }
 

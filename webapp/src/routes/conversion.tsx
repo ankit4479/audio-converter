@@ -1,8 +1,7 @@
 import { useLocation } from 'react-router'
-import App from '../App'
 import type { CodecId } from '../engine/codec'
-import { slugToEdge } from '../platform/graph'
-import { ClientOnlyWidget } from './ClientOnlyWidget'
+import { ConverterShell } from '../platform/ConverterShell'
+import { edgeLabel, slugToEdge } from '../platform/graph'
 
 // Specific conversion routes (e.g. /wav-to-mp3): routes.ts generates one static
 // path per graph edge rather than a single `/:from-to-:to` pattern (react-router
@@ -10,6 +9,11 @@ import { ClientOnlyWidget } from './ClientOnlyWidget'
 // param carrying which edge this is. Recovering it from the URL via
 // slugToEdge - the same function that generated the path - keeps route table
 // and page content from ever disagreeing about what a given path means.
+//
+// Since E1.5 (issue #29) the page shows its converter immediately under a
+// conversion-specific h1, and hands the edge's `from` to the shell so changing the
+// output format there becomes a navigation to that other conversion's own page
+// rather than a silent content swap.
 export default function ConversionRoute() {
   const { pathname } = useLocation()
   // Static hosts (and vite preview, serving each prerendered .../index.html)
@@ -25,6 +29,13 @@ export default function ConversionRoute() {
   // graph.ts's FormatId is a plain string (it also labels not-yet-encodable
   // codecs), but edge.to specifically can only be one of AUDIO_ENCODABLE_TARGETS
   // - a real CodecId - since AUDIO_EDGES only ever targets that set.
-  const codec = edge.to as CodecId
-  return <ClientOnlyWidget>{() => <App initialSettings={{ codec }} />}</ClientOnlyWidget>
+  const target = edge.to as CodecId
+  return (
+    <ConverterShell
+      moduleId={edge.moduleId}
+      heading={`${edgeLabel(edge.from, edge.to)} Converter`}
+      source={edge.from}
+      target={target}
+    />
+  )
 }

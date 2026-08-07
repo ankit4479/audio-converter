@@ -1,5 +1,10 @@
 import { index, route, type RouteConfig } from '@react-router/dev/routes'
-import { allEdges, categoriesWithConversions, edgeToSlug } from './platform/graph'
+import {
+  allEdges,
+  categoriesWithConversions,
+  edgeToSlug,
+  hubPath,
+} from './platform/graph'
 
 // Every entry here is a literal, statically-known path (never a `:param`
 // segment) because the whole set is already enumerable from the graph at
@@ -7,7 +12,7 @@ import { allEdges, categoriesWithConversions, edgeToSlug } from './platform/grap
 // path list from the same categoriesWithConversions()/allEdges() calls, so
 // route table and prerender list can never drift apart.
 const hubRoutes = categoriesWithConversions().map((category) =>
-  route(`/${category}-converter`, 'routes/hub.tsx', { id: `hub-${category}` }),
+  route(hubPath(category), 'routes/hub.tsx', { id: `hub-${category}` }),
 )
 
 const conversionRoutes = allEdges().map((edge) => {

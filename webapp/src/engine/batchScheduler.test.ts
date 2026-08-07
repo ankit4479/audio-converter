@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AudioFile } from '../intake/audioFile'
+import type { CategoryId } from '../platform/module'
 import {
   BatchScheduler,
   defaultConcurrency,
@@ -350,47 +351,87 @@ describe('BatchScheduler - empty batch', () => {
   })
 })
 
-// E0.4 (issue #24): with no createConverter override (the production path),
-// the scheduler must reach the engine through the registered module rather
-// than constructing engine/converter.ts's Converter itself.
+// E0.4 (issue #24): with no createConverter override (the production path), the
+// scheduler must reach the engine through the registered module rather than
+// constructing engine/converter.ts's Converter itself. Which module that is became
+// an option in E1.5 (issue #29), since the shell can now be driving a different one
+// per page.
 describe('BatchScheduler - default converter factory', () => {
-  it("spawns engines via the registered audio module's loadEngine(), not a hardcoded Converter", async () => {
-    const { register, _resetForTests } = await import('../platform/registry')
-    _resetForTests()
-
-    const fakeEngine = {
-      convert: vi.fn(async () => ({ blob: new Blob(['x']), fileName: 'a.flac' })),
+  function fakeModule(id: string, category: CategoryId) {
+    const engine = {
+      convert: vi.fn(async () => ({ blob: new Blob(['x']), fileName: `a.${id}` })),
       dispose: vi.fn(),
     }
-    const loadEngine = vi.fn(async () => fakeEngine)
-    register({
-      id: 'audio',
-      category: 'audio' as const,
-      label: 'Audio',
-      accepts: () => true,
-      inputFormats: [],
-      outputFormats: [],
-      settingsSchema: [],
-      defaultSettings: SETTINGS,
-      probe: async () => ({ supported: true }),
+    const loadEngine = vi.fn(async () => engine)
+    return {
+      engine,
       loadEngine,
-    })
+      module: {
+        id,
+        category,
+        label: id,
+        accepts: () => true,
+        inputFormats: [],
+        outputFormats: [],
+        settingsSchema: [],
+        defaultSettings: SETTINGS,
+        probe: async () => ({ supported: true }),
+        loadEngine,
+      },
+    }
+  }
+
+  it("spawns engines via the named module's loadEngine(), not a hardcoded Converter", async () => {
+    const { register, _resetForTests } = await import('../platform/registry')
+    _resetForTests()
+    const audio = fakeModule('audio', 'audio')
+    register(audio.module)
 
     try {
-      const scheduler = new BatchScheduler({ concurrency: 1 })
+      const scheduler = new BatchScheduler({ concurrency: 1, moduleId: 'audio' })
       await scheduler.run([audioFile('a.wav')], SETTINGS)
 
-      expect(loadEngine).toHaveBeenCalledTimes(1)
-      expect(fakeEngine.convert).toHaveBeenCalledWith(
+      expect(audio.loadEngine).toHaveBeenCalledTimes(1)
+      expect(audio.engine.convert).toHaveBeenCalledWith(
         expect.any(File),
         'a',
         SETTINGS,
         expect.objectContaining({ signal: expect.any(AbortSignal) }),
       )
-      expect(fakeEngine.dispose).toHaveBeenCalledTimes(1)
+      expect(audio.engine.dispose).toHaveBeenCalledTimes(1)
       expect(scheduler.completedCount).toBe(1)
     } finally {
       _resetForTests()
     }
+  })
+
+  // The cross-module half of issue #29: no second real module exists yet (#31+),
+  // so a swap is exercised against a fake one. What matters is that the module id
+  // alone decides which engine runs, and that the other module's engine is never
+  // constructed.
+  it('runs a batch on whichever module it was given, leaving the other module untouched', async () => {
+    const { register, _resetForTests } = await import('../platform/registry')
+    _resetForTests()
+    const audio = fakeModule('audio', 'audio')
+    const image = fakeModule('image', 'image')
+    register(audio.module)
+    register(image.module)
+
+    try {
+      await new BatchScheduler({ concurrency: 1, moduleId: 'image' }).run(
+        [audioFile('a.wav')],
+        SETTINGS,
+      )
+
+      expect(image.loadEngine).toHaveBeenCalledTimes(1)
+      expect(image.engine.dispose).toHaveBeenCalledTimes(1)
+      expect(audio.loadEngine).not.toHaveBeenCalled()
+    } finally {
+      _resetForTests()
+    }
+  })
+
+  it('refuses to be constructed with neither a moduleId nor a converter factory, rather than guessing a module', () => {
+    expect(() => new BatchScheduler({ concurrency: 1 })).toThrow(/moduleId/)
   })
 })

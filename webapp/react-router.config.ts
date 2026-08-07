@@ -1,5 +1,10 @@
 import type { Config } from '@react-router/dev/config'
-import { allEdges, categoriesWithConversions, edgeToSlug } from './src/platform/graph'
+import {
+  allEdges,
+  categoriesWithConversions,
+  edgeToSlug,
+  hubPath,
+} from './src/platform/graph'
 
 // No server: every route ships as static HTML at build time (issue #25). The
 // converter itself already runs entirely client-side (WebCodecs/WASM), so there
@@ -14,7 +19,7 @@ const ssr = false
 
 async function prerender() {
   const home = ['/']
-  const hubs = categoriesWithConversions().map((category) => `/${category}-converter`)
+  const hubs = categoriesWithConversions().map(hubPath)
   const conversions = allEdges().map((edge) => `/${edgeToSlug(edge.from, edge.to)}`)
   return [...home, ...hubs, ...conversions]
 }

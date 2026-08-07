@@ -109,3 +109,98 @@ describe('FileIntakeStore.clear', () => {
     expect(store.getSnapshot().totalDuration).toBe(0)
   })
 })
+
+// E1.5 (issue #29): one store instance now outlives the widget (sharedIntakeStore),
+// so switching to a converter another module owns has to carry the files that
+// module accepts and account for the ones it doesn't. No second real module exists
+// yet (#31+), so the other module is a fake - all setModule needs from it is
+// accepts().
+describe('FileIntakeStore.setModule', () => {
+  const imageOnly = { accepts: (file: { name: string }) => file.name.endsWith('.png') }
+
+  it('keeps the files the new module accepts and drops the rest, reporting which', () => {
+    const store = new FileIntakeStore(audioModule)
+    store.addFiles([scanned('a.mp3'), scanned('b.wav')])
+
+    store.setModule(imageOnly)
+
+    const snap = store.getSnapshot()
+    expect(snap.files).toHaveLength(0)
+    expect(snap.droppedOnModuleChange.map((f) => f.displayName)).toEqual([
+      'a.mp3',
+      'b.wav',
+    ])
+  })
+
+  it('carries forward the files the new module can read', () => {
+    const store = new FileIntakeStore(audioModule)
+    store.addFiles([scanned('a.mp3'), scanned('b.wav')])
+
+    store.setModule({ accepts: (file: { name: string }) => file.name === 'a.mp3' })
+
+    const snap = store.getSnapshot()
+    expect(snap.files.map((f) => f.displayName)).toEqual(['a.mp3'])
+    expect(snap.droppedOnModuleChange.map((f) => f.displayName)).toEqual(['b.wav'])
+  })
+
+  it('recalculates duration for the shorter list, invalidating the scan in flight for the old one', () => {
+    const store = new FileIntakeStore(audioModule)
+    store.addFiles([scanned('a.mp3'), scanned('b.wav')])
+    const staleScan = pendingDurations[0]
+
+    store.setModule(imageOnly)
+    staleScan.resolve(500)
+
+    expect(store.getSnapshot().totalDuration).toBe(0)
+    expect(store.getSnapshot().isCalculatingDuration).toBe(true)
+  })
+
+  it('does nothing at all for the same module, which is what every same-module target change looks like', () => {
+    const store = new FileIntakeStore(audioModule)
+    store.addFiles([scanned('a.mp3')])
+    let notified = false
+    store.subscribe(() => {
+      notified = true
+    })
+
+    store.setModule(audioModule)
+
+    expect(notified).toBe(false)
+    expect(store.getSnapshot().files).toHaveLength(1)
+  })
+
+  it('leaves the list alone when the new module accepts everything already in it', () => {
+    const store = new FileIntakeStore(audioModule)
+    store.addFiles([scanned('a.mp3')])
+
+    store.setModule({ accepts: () => true })
+
+    expect(store.getSnapshot().files).toHaveLength(1)
+    expect(store.getSnapshot().droppedOnModuleChange).toHaveLength(0)
+  })
+
+  it('clears a previous swap’s notice when the next swap drops nothing, rather than reporting it against the new module', () => {
+    const store = new FileIntakeStore(audioModule)
+    store.addFiles([scanned('a.mp3')])
+    store.setModule(imageOnly)
+    expect(store.getSnapshot().droppedOnModuleChange).toHaveLength(1)
+
+    // Back to an audio converter: the list is empty by now, so this swap has
+    // nothing of its own to report - and the shell labels the notice with whichever
+    // module is current, so a leftover one would blame audio for dropping mp3s.
+    store.setModule(audioModule)
+
+    expect(store.getSnapshot().droppedOnModuleChange).toHaveLength(0)
+  })
+
+  it('clears the dropped notice once it has been acknowledged', () => {
+    const store = new FileIntakeStore(audioModule)
+    store.addFiles([scanned('a.mp3')])
+    store.setModule(imageOnly)
+    expect(store.getSnapshot().droppedOnModuleChange).toHaveLength(1)
+
+    store.acknowledgeDroppedFiles()
+
+    expect(store.getSnapshot().droppedOnModuleChange).toHaveLength(0)
+  })
+})

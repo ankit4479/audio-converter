@@ -34,7 +34,8 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
 }
 
 // jsdom doesn't implement Element.scrollIntoView at all - calling it throws "is not
-// a function". LandingPage calls it when "Start converting" reveals the tool.
+// a function", which any component (or Radix primitive) that scrolls something into
+// view would hit the moment it renders in a test.
 if (
   typeof Element !== 'undefined' &&
   typeof Element.prototype.scrollIntoView !== 'function'

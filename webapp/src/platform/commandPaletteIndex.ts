@@ -6,15 +6,9 @@
  * hands these entries straight to cmdk's own (command-score) fuzzy filter via each
  * Command.Item's `keywords`, rather than hand-rolling a second fuzzy matcher.
  */
-import { byCategory } from './registry'
+import { liveCategories } from './converterTargets'
 import type { CategoryId } from './module'
-import {
-  categoriesWithConversions,
-  edgesForCategory,
-  edgeLabel,
-  edgeToSlug,
-  formatNode,
-} from './graph'
+import { edgesForCategory, edgeLabel, edgeToSlug, formatNode } from './graph'
 
 export interface PaletteEntry {
   readonly slug: string
@@ -30,29 +24,27 @@ export interface PaletteEntry {
 /** Same live-category gate MegaMenu/route generation already use, so the palette
  *  never offers a conversion that has no page to land on. */
 export function buildPaletteIndex(): PaletteEntry[] {
-  return categoriesWithConversions()
-    .filter((category) => byCategory(category).length > 0)
-    .flatMap((category) =>
-      edgesForCategory(category).map((edge) => {
-        const from = formatNode(edge.from)
-        const to = formatNode(edge.to)
-        const fromLabel = from?.label ?? edge.from
-        const toLabel = to?.label ?? edge.to
-        const slug = edgeToSlug(edge.from, edge.to)
-        return {
-          slug,
-          label: edgeLabel(edge.from, edge.to),
-          category,
-          href: `/${slug}`,
-          keywords: [
-            edge.from,
-            edge.to,
-            fromLabel,
-            toLabel,
-            ...(from?.extensions ?? []),
-            ...(to?.extensions ?? []),
-          ],
-        }
-      }),
-    )
+  return liveCategories().flatMap((category) =>
+    edgesForCategory(category).map((edge) => {
+      const from = formatNode(edge.from)
+      const to = formatNode(edge.to)
+      const fromLabel = from?.label ?? edge.from
+      const toLabel = to?.label ?? edge.to
+      const slug = edgeToSlug(edge.from, edge.to)
+      return {
+        slug,
+        label: edgeLabel(edge.from, edge.to),
+        category,
+        href: `/${slug}`,
+        keywords: [
+          edge.from,
+          edge.to,
+          fromLabel,
+          toLabel,
+          ...(from?.extensions ?? []),
+          ...(to?.extensions ?? []),
+        ],
+      }
+    }),
+  )
 }

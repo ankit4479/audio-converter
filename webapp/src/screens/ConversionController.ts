@@ -73,12 +73,17 @@ export class ConversionController {
   /**
    * Ported from AppState.chooseDestinationAndConvert: prompts for a destination,
    * then kicks off the batch, writing each result as it settles. Resolves false
-   * if the user canceled the destination picker - the caller (App.tsx) should stay
-   * on the setup screen in that case, same as the Mac app's early `guard` return.
+   * if the user canceled the destination picker - the caller (ConverterShell)
+   * should stay on the setup screen in that case, same as the Mac app's early
+   * `guard` return.
+   *
+   * moduleId names the module whose engine runs the batch (E1.5, issue #29): the
+   * shell can be driving a different one per page now, so this can't be assumed.
    */
   async start(
     files: readonly AudioFile[],
     settings: ConversionSettings,
+    moduleId: string,
   ): Promise<boolean> {
     const destination = await OutputDestination.choose(files.length)
     if (!destination) return false
@@ -88,6 +93,7 @@ export class ConversionController {
       settings.codec,
     )
     const scheduler = new BatchScheduler({
+      moduleId,
       createConverter: this.createConverter,
       onJobSettled: async (job) => {
         if (job.status.kind !== 'done') return
@@ -132,10 +138,20 @@ export class ConversionController {
     return true
   }
 
-  /** ConvertView.swift's cancelAndReturnToSetup half - stops in-flight work. The
-   *  screen switch and "file list intact" guarantee are App.tsx's job: this
-   *  controller never touches FileIntakeStore. */
+  /**
+   * ConvertView.swift's cancelAndReturnToSetup half - stops in-flight work. The
+   * screen switch and "file list intact" guarantee are the shell's job: this
+   * controller never touches FileIntakeStore.
+   *
+   * A batch that already ran to completion is left alone. There is nothing left to
+   * abort, and marking it canceled would make its pending finish() callback skip
+   * destination.finish() - the user would lose a finished conversion's zip with no
+   * error at all. That window (run() resolved, its .then not yet reached) became
+   * reachable in E1.5 (issue #29), which wires cancel() to the widget unmounting,
+   * so any navigation can now land inside it.
+   */
   cancel(): void {
+    if (this.snapshot.scheduler?.isFinished) return
     if (this.currentRunToken) this.currentRunToken.canceled = true
     this.snapshot.scheduler?.cancel()
   }
