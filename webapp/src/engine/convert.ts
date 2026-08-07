@@ -81,6 +81,11 @@ export interface ConvertProgress {
 export interface ConvertResult {
   blob: Blob
   fileName: string
+  /** Something true about this one file that the user should know but that isn't a
+   *  failure - a multi-image HEIC having had only its primary image converted (E2.2,
+   *  issue #32). Shown on that file's row on the convert screen. Optional because
+   *  most conversions have nothing to say. */
+  note?: string
 }
 
 export interface ConvertOptions {

@@ -22,6 +22,7 @@ import {
 // without an entry, instead of producing a blob typed `undefined` at runtime.
 import type { ImageFormatId } from '../../platform/graph'
 import { canvasEncodes, encodeWithWasm, type EncodableMime } from './encoders'
+import { decodeHeif, isHeifContainer } from './heic'
 
 export type { ImageFormatId }
 
@@ -49,6 +50,10 @@ const SUPPORTS_ALPHA: Record<ImageFormatId, boolean> = {
   avif: true,
 }
 
+/** Shared by the two places a decode can fail, so both say the same thing. */
+const UNREADABLE_MESSAGE =
+  'This image could not be read. It may be corrupted, or in a format this browser cannot open.'
+
 const EXTENSION: Record<ImageFormatId, string> = {
   png: 'png',
   jpg: 'jpg',
@@ -68,7 +73,7 @@ export async function convertImage(
   const { signal, onProgress } = options
   throwIfCanceled(signal)
 
-  const bitmap = await decode(file)
+  const { bitmap, note } = await decode(file)
 
   // Everything after the decode runs inside the try, including the cancellation
   // check: a batch cancelled while this file was decoding would otherwise throw
@@ -86,7 +91,7 @@ export async function convertImage(
     const blob = await encode(bitmap, settings)
     throwIfCanceled(signal)
     onProgress?.({ fraction: 1, processedSeconds: 0 })
-    return { blob, fileName: `${baseName}.${EXTENSION[settings.format]}` }
+    return { blob, fileName: `${baseName}.${EXTENSION[settings.format]}`, note }
   } finally {
     // Frees the decoded pixels immediately rather than waiting for GC - a batch of
     // 12MP photos holds ~48MB each otherwise.
@@ -94,23 +99,60 @@ export async function convertImage(
   }
 }
 
-async function decode(file: Blob): Promise<ImageBitmap> {
+interface Decoded {
+  readonly bitmap: ImageBitmap
+  readonly note?: string
+}
+
+async function decode(file: Blob): Promise<Decoded> {
   try {
     // imageOrientation is stated rather than left to the default: the spec's default
     // became 'from-image' only in 2021, and engines that still default to 'none'
     // hand back the raw pixels of an EXIF-rotated photo (every phone camera writes
     // one). Canvas output carries no EXIF, so the rotation isn't merely ignored -
     // it is dropped, and a portrait photo is written permanently sideways.
-    return await createImageBitmap(file, { imageOrientation: 'from-image' })
+    return { bitmap: await createImageBitmap(file, { imageOrientation: 'from-image' }) }
   } catch (cause) {
-    // Everything reaching here is "the browser could not decode this": a corrupt
+    // The browser's own decoder is always tried first, for every format. Safari can
+    // read HEIC natively (and applies the orientation itself), so there the WASM
+    // decoder below never loads at all. Only bytes that are genuinely a HEIF
+    // container are worth a ~1.4MB download - checked against the file's own ftyp
+    // brand, not its extension, so a JPEG renamed .heic fails fast instead.
+    // `.catch(() => false)` because the sniff reads the file: a File whose backing
+    // bytes have moved or been deleted since intake rejects with a DOMException, and
+    // that would otherwise escape this catch block as a raw browser error instead of
+    // the per-file ConversionError below.
+    if (await isHeifContainer(file).catch(() => false)) return decodeWithLibheif(file)
+
+    // Everything else reaching here is "the browser could not decode this": a corrupt
     // file, or a format it has no decoder for (an AVIF on an older browser). Both
     // are per-file failures the batch reports, not reasons to stop.
-    throw new ConversionError(
-      'unreadable',
-      'This image could not be read. It may be corrupted, or in a format this browser cannot open.',
-      { cause },
-    )
+    throw new ConversionError('unreadable', UNREADABLE_MESSAGE, { cause })
+  }
+}
+
+async function decodeWithLibheif(file: Blob): Promise<Decoded> {
+  const { data, imageCount } = await decodeHeif(file)
+  // ImageData in, ImageBitmap out, so everything downstream - the matte, the canvas,
+  // the encoders, the close() that frees the pixels - stays one code path regardless of
+  // which decoder produced them.
+  //
+  // This runs inside decode()'s catch block, so its own try no longer covers it: a
+  // failure here (the browser refusing to allocate a second full-size copy of a 48MP
+  // photo) would escape as a raw DOMException, which BatchScheduler shows the user
+  // verbatim instead of the per-file sentence every other decode failure gets.
+  let bitmap: ImageBitmap
+  try {
+    bitmap = await createImageBitmap(data)
+  } catch (cause) {
+    throw new ConversionError('unreadable', UNREADABLE_MESSAGE, { cause })
+  }
+  return {
+    bitmap,
+    note:
+      imageCount > 1
+        ? `This file held ${imageCount} images. The main one was converted; the others were left out.`
+        : undefined,
   }
 }
 

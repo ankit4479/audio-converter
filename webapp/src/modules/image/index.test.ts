@@ -13,10 +13,16 @@ describe('imageModule.accepts', () => {
     }
   })
 
+  it('takes HEIC and HEIF now that it can decode them (E2.2, issue #32)', () => {
+    for (const name of ['IMG_4821.HEIC', 'photo.heic', 'photo.heif']) {
+      expect(imageModule.accepts(meta(name))).toBe(true)
+    }
+  })
+
   it('rejects files it has no decoder for, rather than accepting and failing later', () => {
-    // HEIC is #32 and SVG is #33: both need a decoder this module doesn't ship yet,
-    // so taking them now would mean accepting a file we then fail on per-file.
-    for (const name of ['photo.heic', 'logo.svg', 'song.mp3', 'clip.mp4', 'notes.txt']) {
+    // SVG is #33: it needs a decoder this module doesn't ship yet, so taking it now
+    // would mean accepting a file we then fail on per-file.
+    for (const name of ['logo.svg', 'song.mp3', 'clip.mp4', 'notes.txt']) {
       expect(imageModule.accepts(meta(name))).toBe(false)
     }
   })
@@ -27,20 +33,30 @@ describe('imageModule.accepts', () => {
 })
 
 describe('imageModule contract', () => {
-  it('agrees with the graph about which formats exist and which module owns them', () => {
-    const imageNodes = allEdges()
-      .filter((edge) => edge.moduleId === 'image')
-      .flatMap((edge) => [edge.from, edge.to])
-    expect(new Set(imageNodes)).toEqual(new Set(imageModule.outputFormats))
-    for (const id of imageModule.outputFormats) {
+  it('agrees with the graph about which formats it reads and which it writes', () => {
+    const imageEdges = allEdges().filter((edge) => edge.moduleId === 'image')
+    expect(new Set(imageEdges.map((edge) => edge.from))).toEqual(
+      new Set(imageModule.inputFormats),
+    )
+    expect(new Set(imageEdges.map((edge) => edge.to))).toEqual(
+      new Set(imageModule.outputFormats),
+    )
+    for (const id of [...imageModule.inputFormats, ...imageModule.outputFormats]) {
       expect(formatNode(id)?.category).toBe('image')
     }
   })
 
-  it('can produce every format it accepts as a source, unlike audio', () => {
-    expect([...imageModule.inputFormats].sort()).toEqual(
-      [...imageModule.outputFormats].sort(),
-    )
+  it('reads more formats than it writes: HEIC in, never out (E2.2, issue #32)', () => {
+    expect(imageModule.inputFormats).toContain('heic')
+    expect(imageModule.inputFormats).toContain('heif')
+    expect(imageModule.outputFormats).not.toContain('heic')
+    expect(imageModule.outputFormats).not.toContain('heif')
+  })
+
+  it('never offers a decode-only format as a conversion target anywhere in the graph', () => {
+    for (const edge of allEdges()) {
+      expect(['heic', 'heif']).not.toContain(edge.to)
+    }
   })
 
   it('names the settings key the shell should treat as the output format', () => {

@@ -18,7 +18,11 @@ import {
   decodeConversionError,
   isEncodedConversionError,
 } from '../../engine/convert'
-import { formatNode, IMAGE_FORMAT_IDS } from '../../platform/graph'
+import {
+  formatNode,
+  IMAGE_FORMAT_IDS,
+  IMAGE_INPUT_FORMAT_IDS,
+} from '../../platform/graph'
 import type {
   CapabilityReport,
   ConverterEngine,
@@ -31,10 +35,10 @@ import type {
 import type { ImageFormatId, ImageSettings } from './convert'
 
 /** Input extensions this module accepts. Broader than the graph's output formats:
- *  `jpeg` is the same format as `jpg` under another name, and both are things people
- *  actually have on disk. HEIC (#32) and SVG (#33) join this list with the decoders
- *  that make them work - accepting them now would mean taking a file we then fail on. */
-const INPUT_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'avif'] as const
+ *  `jpeg` is the same format as `jpg` under another name, and `heic`/`heif` (E2.2,
+ *  issue #32) are read but never written. SVG (#33) joins with the decoder that makes
+ *  it work - accepting a format now would mean taking a file we then fail on. */
+const INPUT_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'avif', 'heic', 'heif'] as const
 
 /** Straight from the graph (the same way modules/audio takes AUDIO_ENCODABLE_TARGETS
  *  from there) rather than a second hand-written list: every image format is both a
@@ -197,7 +201,8 @@ export const imageModule: ConverterModule<ImageSettings> = {
   label: 'Image',
   presentation: {
     item: { singular: 'image', plural: 'images' },
-    intakeHint: 'PNG, JPG, WebP, and AVIF. Mixed formats are fine.',
+    intakeHint:
+      'HEIC from your phone, plus PNG, JPG, WebP, and AVIF. Mixed formats are fine.',
     // An image has no playing time, so the intake store skips the scan entirely
     // rather than summing zeroes (see FileIntakeStore.recalculateDuration).
     tracksDuration: false,
@@ -205,7 +210,9 @@ export const imageModule: ConverterModule<ImageSettings> = {
   accepts: (file: FileMeta) =>
     (INPUT_EXTENSIONS as readonly string[]).includes(extensionOf(file.name)),
   targetSettingKey: 'format',
-  inputFormats: IMAGE_FORMATS,
+  // Input and output differ since #32: HEIC can be read but is deliberately never
+  // written, which is the whole point of converting one.
+  inputFormats: IMAGE_INPUT_FORMAT_IDS,
   outputFormats: IMAGE_FORMATS,
   settingsSchema: SETTINGS_SCHEMA,
   defaultSettings: DEFAULT_SETTINGS,

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { BatchScheduler, type JobConverter } from '../engine/batchScheduler'
 import type { AudioFile } from '../intake/audioFile'
 import { OutputDestination } from '../output/OutputDestination'
+import { audioModule } from '../modules/audio'
 import { ConvertView } from './ConvertView'
 
 function audioFile(name: string): AudioFile {
@@ -57,6 +58,7 @@ describe('ConvertView - folder chip (ConvertView.swift:28-46)', () => {
         scheduler={scheduler}
         destination={destination}
         targetLabel="FLAC"
+        presentation={audioModule.presentation}
         finalized={true}
         onChange={() => {}}
         onConvertMore={() => {}}
@@ -82,6 +84,7 @@ describe('ConvertView - folder chip (ConvertView.swift:28-46)', () => {
         scheduler={scheduler}
         destination={destination}
         targetLabel="FLAC"
+        presentation={audioModule.presentation}
         finalized={true}
         onChange={onChange}
         onConvertMore={() => {}}
@@ -102,6 +105,7 @@ describe('ConvertView - progress block (ConvertView.swift:48-68)', () => {
         scheduler={scheduler}
         destination={destination}
         targetLabel="FLAC"
+        presentation={audioModule.presentation}
         finalized={true}
         onChange={() => {}}
         onConvertMore={() => {}}
@@ -121,6 +125,7 @@ describe('ConvertView - done card (ConvertView.swift:70-118)', () => {
         scheduler={scheduler}
         destination={destination}
         targetLabel="FLAC"
+        presentation={audioModule.presentation}
         finalized={true}
         onChange={() => {}}
         onConvertMore={() => {}}
@@ -140,6 +145,7 @@ describe('ConvertView - done card (ConvertView.swift:70-118)', () => {
         scheduler={scheduler}
         destination={destination}
         targetLabel="FLAC"
+        presentation={audioModule.presentation}
         finalized={true}
         onChange={() => {}}
         onConvertMore={() => {}}
@@ -164,6 +170,7 @@ describe('ConvertView - done card (ConvertView.swift:70-118)', () => {
         scheduler={scheduler}
         destination={destination}
         targetLabel="FLAC"
+        presentation={audioModule.presentation}
         finalized={true}
         onChange={() => {}}
         onConvertMore={() => {}}
@@ -185,6 +192,7 @@ describe('ConvertView - done card (ConvertView.swift:70-118)', () => {
         scheduler={scheduler}
         destination={destination}
         targetLabel="FLAC"
+        presentation={audioModule.presentation}
         finalized={true}
         onChange={() => {}}
         onConvertMore={onConvertMore}
@@ -204,6 +212,7 @@ describe('ConvertView - done card (ConvertView.swift:70-118)', () => {
         scheduler={scheduler}
         destination={destination}
         targetLabel="FLAC"
+        presentation={audioModule.presentation}
         finalized={true}
         onChange={() => {}}
         onConvertMore={() => {}}

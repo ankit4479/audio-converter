@@ -164,6 +164,15 @@ export class BatchScheduler<TSettings = unknown> {
     return this.jobs.filter((job) => job.status.kind === 'failed')
   }
 
+  /** Jobs that converted fine but came back with something worth telling the user - a
+   *  multi-image HEIC having had only its primary image converted (E2.2, issue #32).
+   *  Separate from failedJobs because these produced a real output file. */
+  get notedJobs(): readonly BatchJob[] {
+    return this.jobs.filter(
+      (job) => job.status.kind === 'done' && job.status.result.note !== undefined,
+    )
+  }
+
   get isFinished(): boolean {
     return (
       !this.isRunning &&

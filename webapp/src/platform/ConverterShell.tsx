@@ -197,6 +197,7 @@ function ConverterWidget({
       scheduler={conversion.scheduler}
       destination={conversion.destination}
       targetLabel={conversion.targetLabel}
+      presentation={module.presentation}
       finalized={conversion.finalized}
       onChange={handleChange}
       onConvertMore={handleConvertMore}

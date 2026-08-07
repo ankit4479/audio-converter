@@ -113,9 +113,10 @@ describe('slug round-trip', () => {
 // E2.1 (issue #31): the graph stopped being audio-only.
 describe('image format nodes and edges', () => {
   const IMAGE_FORMATS = ['png', 'jpg', 'webp', 'avif']
+  const DECODE_ONLY = ['heic', 'heif']
 
   it('has a node per image format, each with a MIME type and an extension', () => {
-    for (const id of IMAGE_FORMATS) {
+    for (const id of [...IMAGE_FORMATS, ...DECODE_ONLY]) {
       const node = formatNode(id)
       expect(node?.category).toBe('image')
       expect(node?.mime).toMatch(/^image\//)
@@ -129,15 +130,38 @@ describe('image format nodes and edges', () => {
     expect(outputExtension('jpg')).toBe('jpg')
   })
 
-  it('connects every image format to every other, in both directions, never to itself', () => {
-    const edges = edgesForCategory('image')
-    expect(edges).toHaveLength(IMAGE_FORMATS.length * (IMAGE_FORMATS.length - 1))
-    for (const edge of edges) {
+  it('connects every encodable image format to every other, in both directions, never to itself', () => {
+    const encodableEdges = edgesForCategory('image').filter(
+      (edge) => !DECODE_ONLY.includes(edge.from),
+    )
+    expect(encodableEdges).toHaveLength(IMAGE_FORMATS.length * (IMAGE_FORMATS.length - 1))
+    for (const edge of encodableEdges) {
       expect(edge.from).not.toBe(edge.to)
       expect(edge.moduleId).toBe('image')
     }
     expect(moduleForEdge('png', 'webp')).toBe('image')
-    expect(moduleForEdge('heic', 'jpg')).toBeUndefined() // #32 adds this
+  })
+
+  // E2.2 (issue #32): HEIC and HEIF are read but never written.
+  it('gives each decode-only format edges out to the universally-openable targets, and none in', () => {
+    for (const from of DECODE_ONLY) {
+      expect(
+        edgesForCategory('image')
+          .filter((edge) => edge.from === from)
+          .map((edge) => edge.to)
+          .sort(),
+      ).toEqual(['jpg', 'png', 'webp'])
+      expect(allEdges().some((edge) => edge.to === from)).toBe(false)
+    }
+    expect(moduleForEdge('heic', 'jpg')).toBe('image')
+    // Deliberately absent, matching #32's stated scope - see that issue's note.
+    expect(moduleForEdge('heic', 'avif')).toBeUndefined()
+  })
+
+  it('gives HEIC its own node so it has its own indexable page, separate from HEIF', () => {
+    expect(formatNode('heic')?.label).toBe('HEIC')
+    expect(formatNode('heif')?.label).toBe('HEIF')
+    expect(outputExtension('heic')).toBe('heic')
   })
 
   it('never crosses categories, so no page claims to turn an MP3 into a PNG', () => {

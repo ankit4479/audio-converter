@@ -5,12 +5,17 @@
 import type { BatchJob } from '../engine/batchScheduler'
 import { BatchScheduler } from '../engine/batchScheduler'
 import type { OutputDestination, OutputMode } from '../output/OutputDestination'
+import type { ModulePresentation } from '../platform/module'
 import { truncateMiddle } from './truncateMiddle'
 
 export interface ConvertViewProps {
   scheduler: BatchScheduler
   destination: OutputDestination
   targetLabel: string
+  /** What this module calls its files. The done card said "songs" outright until E2.2
+   *  (issue #32) - correct while audio was the only module, wrong the moment an image
+   *  batch finished. */
+  presentation: ModulePresentation
   /** True once the destination has actually finished finalizing (the zip has
    *  built and downloaded, the single file has downloaded, or the directory write
    *  - already synchronous by the time scheduler.isFinished flips - has settled).
@@ -25,6 +30,7 @@ export function ConvertView({
   scheduler,
   destination,
   targetLabel,
+  presentation,
   finalized,
   onChange,
   onConvertMore,
@@ -41,6 +47,7 @@ export function ConvertView({
         <DoneCard
           scheduler={scheduler}
           destination={destination}
+          presentation={presentation}
           onConvertMore={onConvertMore}
         />
       )}
@@ -134,19 +141,31 @@ function failureReason(job: BatchJob): string {
   return job.status.kind === 'failed' ? job.status.reason : 'unknown error'
 }
 
+/** The engine's own note for a converted file. Only called for jobs
+ *  scheduler.notedJobs already selected, so the fallback is unreachable in practice. */
+function jobNote(job: BatchJob): string {
+  return job.status.kind === 'done' ? (job.status.result.note ?? '') : ''
+}
+
 // ConvertView.swift:70-118
 function DoneCard({
   scheduler,
   destination,
+  presentation,
   onConvertMore,
 }: {
   scheduler: BatchScheduler
   destination: OutputDestination
+  presentation: ModulePresentation
   onConvertMore: () => void
 }) {
   const failed = scheduler.failedJobs
   const shown = failed.slice(0, MAX_SHOWN_FAILURES)
   const remaining = failed.length - shown.length
+  // Files that converted but had something worth saying - a multi-image HEIC having
+  // had only its primary image converted (#32). Not failures, so they get their own
+  // list rather than being mixed in with the ones that didn't convert.
+  const noted = scheduler.notedJobs
 
   return (
     <div className="space-y-4 rounded-card border border-border bg-surface p-7 text-center">
@@ -156,7 +175,11 @@ function DoneCard({
 
       <div className="space-y-1">
         <p className="text-title font-semibold text-text-primary">
-          {scheduler.completedCount} of {scheduler.totalCount} songs converted
+          {scheduler.completedCount} of {scheduler.totalCount}{' '}
+          {scheduler.totalCount === 1
+            ? presentation.item.singular
+            : presentation.item.plural}{' '}
+          converted
         </p>
         {failed.length > 0 && (
           <p className="text-callout text-text-secondary">
@@ -173,6 +196,16 @@ function DoneCard({
             </li>
           ))}
           {remaining > 0 && <li>and {remaining} more</li>}
+        </ul>
+      )}
+
+      {noted.length > 0 && (
+        <ul className="mx-auto max-w-[380px] space-y-1 text-left text-caption text-text-secondary">
+          {noted.map((job) => (
+            <li key={job.id}>
+              - {job.file.displayName}, {jobNote(job)}
+            </li>
+          ))}
         </ul>
       )}
 

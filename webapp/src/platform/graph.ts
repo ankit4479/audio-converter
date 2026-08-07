@@ -77,54 +77,89 @@ const AUDIO_EDGES: readonly ConversionEdge[] = CODEC_IDS.flatMap((from) =>
 const IMAGE_MODULE_ID = 'image'
 
 /**
- * Image formats (E2.1, issue #31). Written out here rather than derived from a
- * codec table the way audio is: there is no equivalent table to derive from, since
- * the browser itself is the codec (createImageBitmap to decode, OffscreenCanvas or
- * a WASM encoder to encode - see modules/image/).
+ * Image formats. The browser is the codec here (createImageBitmap to decode,
+ * OffscreenCanvas or a WASM encoder to encode - see modules/image/), so there is no
+ * codec table to derive these from the way audio is derived from engine/codec.ts.
  *
- * Every one of these is both a source and a target, so unlike audio there is no
- * encodable-subset filter. HEIC/HEIF (#32) and SVG (#33/#34) join this list in
- * their own issues; they are asymmetric (decode-only and vector) and each needs a
- * decoder this issue doesn't ship.
+ * Split into two tables since E2.2 (issue #32), because HEIC is asymmetric: it can be
+ * read but this app deliberately never writes it. Anything encodable is both a source
+ * and a target; a decode-only format is a source only, and the edge generation below
+ * is what enforces that rather than a filter each caller has to remember.
  *
  * The first extension is the canonical one, used for output file names
  * (output/outputPath.ts); any others are aliases that only ever appear as input,
  * which is why 'jpeg' is listed but never produced.
  */
-const IMAGE_FORMATS = [
+const IMAGE_ENCODABLE_FORMATS = [
   { id: 'png', label: 'PNG', extensions: ['png'], mime: 'image/png' },
   { id: 'jpg', label: 'JPEG', extensions: ['jpg', 'jpeg'], mime: 'image/jpeg' },
   { id: 'webp', label: 'WebP', extensions: ['webp'], mime: 'image/webp' },
   { id: 'avif', label: 'AVIF', extensions: ['avif'], mime: 'image/avif' },
 ] as const
 
-/** The image format ids, as a closed union rather than a plain FormatId, so a
- *  format added to the table above is a compile error everywhere the image module
- *  enumerates formats (its MIME/extension/alpha tables) until it is handled. */
-export type ImageFormatId = (typeof IMAGE_FORMATS)[number]['id']
+/**
+ * Formats the image module can read but never write (E2.2, issue #32). HEIC encode is
+ * an explicit non-goal: the whole point is getting a phone photo into a format
+ * everything else can already open.
+ *
+ * heic and heif are separate nodes rather than one with two extensions because they
+ * are separate search intents - people look for "heic to jpg" and "heif to jpg" - and
+ * one node per intent is what gives each its own indexable page.
+ */
+const IMAGE_DECODE_ONLY_FORMATS = [
+  { id: 'heic', label: 'HEIC', extensions: ['heic'], mime: 'image/heic' },
+  { id: 'heif', label: 'HEIF', extensions: ['heif'], mime: 'image/heif' },
+] as const
 
-/** Exported so modules/image builds its input/output lists from this table rather
- *  than repeating it - the same reason AUDIO_ENCODABLE_TARGETS is exported above. A
- *  second, hand-written copy of the list in the module could drift out of step with
- *  the graph, and then outputExtension() would return undefined for a target the
- *  module still offered and ConverterShell would name output files with the bare
- *  format id. */
-export const IMAGE_FORMAT_IDS: readonly ImageFormatId[] = IMAGE_FORMATS.map(
+/** The formats the image module can produce, as a closed union rather than a plain
+ *  FormatId, so a format added to the encodable table is a compile error everywhere
+ *  the module enumerates targets (its MIME/extension/alpha tables) until handled. */
+export type ImageFormatId = (typeof IMAGE_ENCODABLE_FORMATS)[number]['id']
+
+/** Every format the image module can read, encodable or not. */
+export type ImageInputFormatId =
+  ImageFormatId | (typeof IMAGE_DECODE_ONLY_FORMATS)[number]['id']
+
+/** Exported so modules/image builds its input/output lists from these tables rather
+ *  than repeating them - the same reason AUDIO_ENCODABLE_TARGETS is exported above. A
+ *  second, hand-written copy could drift out of step with the graph, and then
+ *  outputExtension() would return undefined for a target the module still offered and
+ *  ConverterShell would name output files with the bare format id. */
+export const IMAGE_FORMAT_IDS: readonly ImageFormatId[] = IMAGE_ENCODABLE_FORMATS.map(
   (format) => format.id,
 )
 
-const IMAGE_FORMAT_NODES: readonly FormatNode[] = IMAGE_FORMATS.map((format) => ({
-  ...format,
-  category: 'image' as const,
-}))
+export const IMAGE_INPUT_FORMAT_IDS: readonly ImageInputFormatId[] = [
+  ...IMAGE_FORMAT_IDS,
+  ...IMAGE_DECODE_ONLY_FORMATS.map((format) => format.id),
+]
 
-const IMAGE_EDGES: readonly ConversionEdge[] = IMAGE_FORMATS.flatMap((from) =>
-  IMAGE_FORMATS.filter((to) => to.id !== from.id).map((to) => ({
-    from: from.id,
-    to: to.id,
-    moduleId: IMAGE_MODULE_ID,
-  })),
-)
+const IMAGE_FORMAT_NODES: readonly FormatNode[] = [
+  ...IMAGE_ENCODABLE_FORMATS,
+  ...IMAGE_DECODE_ONLY_FORMATS,
+].map((format) => ({ ...format, category: 'image' as const }))
+
+/** Decode-only sources reach JPG, PNG, and WebP - the three formats that are
+ *  universally openable, and the scope #32 defined. They deliberately do not reach
+ *  AVIF, unlike every encodable source: see that issue's closing note. */
+const DECODE_ONLY_TARGETS: readonly ImageFormatId[] = ['jpg', 'png', 'webp']
+
+const IMAGE_EDGES: readonly ConversionEdge[] = [
+  ...IMAGE_ENCODABLE_FORMATS.flatMap((from) =>
+    IMAGE_FORMAT_IDS.filter((to) => to !== from.id).map((to) => ({
+      from: from.id,
+      to,
+      moduleId: IMAGE_MODULE_ID,
+    })),
+  ),
+  ...IMAGE_DECODE_ONLY_FORMATS.flatMap((from) =>
+    DECODE_ONLY_TARGETS.map((to) => ({
+      from: from.id,
+      to,
+      moduleId: IMAGE_MODULE_ID,
+    })),
+  ),
+]
 
 const FORMAT_NODES: readonly FormatNode[] = [...AUDIO_FORMAT_NODES, ...IMAGE_FORMAT_NODES]
 const EDGES: readonly ConversionEdge[] = [...AUDIO_EDGES, ...IMAGE_EDGES]

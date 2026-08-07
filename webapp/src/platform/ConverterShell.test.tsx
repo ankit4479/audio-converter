@@ -302,7 +302,9 @@ describe('ConverterShell - a second module', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('Drag images or folders here')).toBeInTheDocument()
     expect(
-      screen.getByText('PNG, JPG, WebP, and AVIF. Mixed formats are fine.'),
+      // Read from the module rather than restated, so its copy can change without
+      // this test having to be edited in lockstep.
+      screen.getByText(imageModule.presentation.intakeHint),
     ).toBeInTheDocument()
     const target = screen.getByLabelText<HTMLSelectElement>('Convert to')
     expect(target).toHaveValue('webp')
