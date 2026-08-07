@@ -62,7 +62,7 @@ function stubImageApis({
   return { convertToBlob, getImageData, drawImage, fillRect, context }
 }
 
-const SETTINGS = { format: 'webp' as const, quality: 80 }
+const SETTINGS = { format: 'webp' as const, quality: 80, scale: '1' as const }
 
 beforeEach(() => {
   closed.length = 0
@@ -96,7 +96,11 @@ describe('convertImage', () => {
   it('passes quality to canvas on its own 0-1 scale, not the slider’s 1-100', async () => {
     const { convertToBlob } = stubImageApis()
     _setCanvasSupportForTests('image/webp', true)
-    await convertImage(new Blob(['x']), 'a', { format: 'webp', quality: 80 })
+    await convertImage(new Blob(['x']), 'a', {
+      format: 'webp',
+      quality: 80,
+      scale: '1' as const,
+    })
     expect(convertToBlob).toHaveBeenCalledWith({ type: 'image/webp', quality: 0.8 })
   })
 
@@ -105,6 +109,7 @@ describe('convertImage', () => {
     const result = await convertImage(new Blob(['x']), 'a', {
       format: 'png',
       quality: 80,
+      scale: '1' as const,
     })
     expect(convertToBlob).toHaveBeenCalledWith({ type: 'image/png' })
     expect(result.fileName).toBe('a.png')
@@ -114,7 +119,11 @@ describe('convertImage', () => {
     const { convertToBlob } = stubImageApis()
     // No _setCanvasSupportForTests call: if PNG were probed this would consult the
     // stub's blob type and could fall through to a WASM path.
-    await convertImage(new Blob(['x']), 'a', { format: 'png', quality: 80 })
+    await convertImage(new Blob(['x']), 'a', {
+      format: 'png',
+      quality: 80,
+      scale: '1' as const,
+    })
     expect(convertToBlob).toHaveBeenCalledTimes(1)
   })
 
@@ -127,6 +136,7 @@ describe('convertImage', () => {
     const result = await convertImage(new Blob(['x']), 'a', {
       format: 'avif',
       quality: 50,
+      scale: '1' as const,
     })
 
     expect(getImageData).toHaveBeenCalled()
@@ -154,7 +164,11 @@ describe('convertImage', () => {
     stubImageApis()
     _setCanvasSupportForTests('image/jpeg', false)
     await expect(
-      convertImage(new Blob(['x']), 'a', { format: 'jpg', quality: 80 }),
+      convertImage(new Blob(['x']), 'a', {
+        format: 'jpg',
+        quality: 80,
+        scale: '1' as const,
+      }),
     ).rejects.toMatchObject({ reason: 'unsupported-in-browser' })
   })
 
@@ -172,7 +186,11 @@ describe('convertImage', () => {
     stubImageApis()
     _setCanvasSupportForTests('image/jpeg', false)
     await expect(
-      convertImage(new Blob(['x']), 'a', { format: 'jpg', quality: 80 }),
+      convertImage(new Blob(['x']), 'a', {
+        format: 'jpg',
+        quality: 80,
+        scale: '1' as const,
+      }),
     ).rejects.toThrow()
     // A 12MP photo is ~48MB of decoded pixels; leaking one per failed file in a batch
     // is what the finally in convertImage is there to prevent.
@@ -193,7 +211,11 @@ describe('convertImage - alpha handling', () => {
     const { fillRect, context } = stubImageApis({ width: 320, height: 240 })
     _setCanvasSupportForTests('image/jpeg', true)
 
-    await convertImage(new Blob(['x']), 'a', { format: 'jpg', quality: 80 })
+    await convertImage(new Blob(['x']), 'a', {
+      format: 'jpg',
+      quality: 80,
+      scale: '1' as const,
+    })
 
     // Without this, a transparent PNG's see-through regions encode as black: a
     // fresh 2D canvas is transparent *black*, and JPEG just drops the alpha.
@@ -206,7 +228,7 @@ describe('convertImage - alpha handling', () => {
       const { fillRect } = stubImageApis()
       _setCanvasSupportForTests('image/webp', true)
       _setCanvasSupportForTests('image/avif', true)
-      await convertImage(new Blob(['x']), 'a', { format, quality: 80 })
+      await convertImage(new Blob(['x']), 'a', { format, quality: 80, scale: '1' })
       expect(fillRect).not.toHaveBeenCalled()
       vi.unstubAllGlobals()
     }
@@ -318,6 +340,7 @@ describe('convertImage - HEIC fallback', () => {
     const result = await convertImage(heifBytes(), 'IMG_4821', {
       format: 'jpg',
       quality: 80,
+      scale: '1' as const,
     })
 
     expect(decode).toHaveBeenCalledTimes(1)
@@ -338,6 +361,7 @@ describe('convertImage - HEIC fallback', () => {
     const result = await convertImage(heifBytes(), 'IMG_4821', {
       format: 'jpg',
       quality: 80,
+      scale: '1' as const,
     })
 
     expect(result.note).toBe(
@@ -355,7 +379,11 @@ describe('convertImage - HEIC fallback', () => {
     _setCanvasSupportForTests('image/jpeg', true)
 
     for (const name of ['IMG_1', 'IMG_2', 'IMG_3']) {
-      await convertImage(heifBytes(), name, { format: 'jpg', quality: 80 })
+      await convertImage(heifBytes(), name, {
+        format: 'jpg',
+        quality: 80,
+        scale: '1' as const,
+      })
     }
 
     // One decoder for the batch, not one per file: its decode() is the only thing that
@@ -395,7 +423,11 @@ describe('convertImage - HEIC fallback', () => {
     _setCanvasSupportForTests('image/jpeg', true)
 
     await expect(
-      convertImage(heifBytes(), 'IMG_4821', { format: 'jpg', quality: 80 }),
+      convertImage(heifBytes(), 'IMG_4821', {
+        format: 'jpg',
+        quality: 80,
+        scale: '1' as const,
+      }),
     ).rejects.toMatchObject({ reason: 'unreadable' })
     vi.doUnmock('libheif-js/libheif-wasm/libheif-bundle.mjs')
   })
@@ -410,6 +442,7 @@ describe('convertImage - HEIC fallback', () => {
       convertImage(new Blob([new Uint8Array(64)]), 'broken', {
         format: 'jpg',
         quality: 80,
+        scale: '1' as const,
       }),
     ).rejects.toMatchObject({ reason: 'unreadable' })
     expect(decode).not.toHaveBeenCalled()

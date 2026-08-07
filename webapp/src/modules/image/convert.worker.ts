@@ -10,14 +10,16 @@
  */
 import * as Comlink from 'comlink'
 import type { ConvertProgress, ConvertResult } from '../../engine/convert'
-import { convertImage, type ImageSettings } from './convert'
+import { convertImage, type ImageSettings, type ImageSource } from './convert'
 
 const controllers = new Map<string, AbortController>()
 
 const api = {
   async convertFile(
     jobId: string,
-    file: Blob,
+    // A Blob for anything the worker can decode itself; an ImageBitmap for SVG, which
+    // the main thread had to rasterize (see svg.ts) and transfers in.
+    file: ImageSource,
     baseName: string,
     settings: ImageSettings,
     // Callers must wrap this in Comlink.proxy(...) - plain functions aren't

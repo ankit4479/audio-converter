@@ -113,7 +113,7 @@ describe('slug round-trip', () => {
 // E2.1 (issue #31): the graph stopped being audio-only.
 describe('image format nodes and edges', () => {
   const IMAGE_FORMATS = ['png', 'jpg', 'webp', 'avif']
-  const DECODE_ONLY = ['heic', 'heif']
+  const DECODE_ONLY = ['heic', 'heif', 'svg']
 
   it('has a node per image format, each with a MIME type and an extension', () => {
     for (const id of [...IMAGE_FORMATS, ...DECODE_ONLY]) {
@@ -156,6 +156,15 @@ describe('image format nodes and edges', () => {
     expect(moduleForEdge('heic', 'jpg')).toBe('image')
     // Deliberately absent, matching #32's stated scope - see that issue's note.
     expect(moduleForEdge('heic', 'avif')).toBeUndefined()
+  })
+
+  it('gives SVG a node too, decode-only for a different reason (E2.3, issue #33)', () => {
+    // Not because writing SVG is undesirable, but because writing it means tracing
+    // pixels into paths - a different problem, and #34's.
+    expect(formatNode('svg')?.label).toBe('SVG')
+    expect(formatNode('svg')?.mime).toBe('image/svg+xml')
+    expect(allEdges().some((edge) => edge.to === 'svg')).toBe(false)
+    expect(moduleForEdge('svg', 'png')).toBe('image')
   })
 
   it('gives HEIC its own node so it has its own indexable page, separate from HEIF', () => {

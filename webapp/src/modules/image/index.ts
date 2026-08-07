@@ -32,13 +32,22 @@ import type {
   FileMeta,
   SettingField,
 } from '../../platform/module'
-import type { ImageFormatId, ImageSettings } from './convert'
+import type { ImageFormatId, ImageSettings, ImageSource } from './convert'
+import { isSvg, rasterizeSvg } from './svg'
 
 /** Input extensions this module accepts. Broader than the graph's output formats:
  *  `jpeg` is the same format as `jpg` under another name, and `heic`/`heif` (E2.2,
- *  issue #32) are read but never written. SVG (#33) joins with the decoder that makes
- *  it work - accepting a format now would mean taking a file we then fail on. */
-const INPUT_EXTENSIONS = ['png', 'jpg', 'jpeg', 'webp', 'avif', 'heic', 'heif'] as const
+ *  issue #32) and `svg` (E2.3, issue #33) are read but never written. */
+const INPUT_EXTENSIONS = [
+  'png',
+  'jpg',
+  'jpeg',
+  'webp',
+  'avif',
+  'heic',
+  'heif',
+  'svg',
+] as const
 
 /** Straight from the graph (the same way modules/audio takes AUDIO_ENCODABLE_TARGETS
  *  from there) rather than a second hand-written list: every image format is both a
@@ -52,6 +61,9 @@ const IMAGE_FORMATS: readonly ImageFormatId[] = IMAGE_FORMAT_IDS
 const DEFAULT_SETTINGS: ImageSettings = {
   format: 'webp',
   quality: 80,
+  // 1x: a vector's own declared size is what its author intended, so anything else
+  // has to be asked for.
+  scale: '1',
 }
 
 /**
@@ -82,6 +94,21 @@ const SETTINGS_SCHEMA: readonly SettingField[] = [
     min: 1,
     max: 100,
     step: 1,
+  },
+  // Only meaningful for a vector source, which has no pixel size of its own (E2.3,
+  // issue #33). It shows on raster pages too for now, where it does nothing; making
+  // fields conditional on the source and target is #35's work, alongside the same
+  // treatment for the quality slider above.
+  {
+    kind: 'select',
+    key: 'scale',
+    label: 'Size (vector sources)',
+    options: [
+      { value: '1', label: '1x' },
+      { value: '2', label: '2x' },
+      { value: '3', label: '3x' },
+      { value: '4', label: '4x' },
+    ],
   },
 ]
 
@@ -138,10 +165,23 @@ class ImageEngine implements ConverterEngine<ImageSettings> {
     }
 
     const jobId = crypto.randomUUID()
+    // SVG has to be rasterized before the worker sees it - see prepare().
+    const { source, note } = await this.prepare(file, settings)
+    // Rasterizing is main-thread work with several awaits in it, and the abort listener
+    // below is not attached yet, so a batch cancelled during that window would fire
+    // `abort` with nothing listening: the job would still be posted, run to completion,
+    // and be written to the user's folder after the cancel - exactly what the check
+    // this method opens with prevents for an already-cancelled batch. The bitmap is
+    // closed on the way out because nothing downstream will now free it (the worker's
+    // convertImage is what normally does).
+    if (options.signal?.aborted) {
+      if (!(source instanceof Blob)) source.close()
+      throw new ConversionError('canceled', 'Conversion was canceled.')
+    }
     const work = this.api
       .convertFile(
         jobId,
-        file,
+        source,
         baseName,
         settings,
         options.onProgress ? Comlink.proxy(options.onProgress) : undefined,
@@ -156,6 +196,11 @@ class ImageEngine implements ConverterEngine<ImageSettings> {
       .catch((error: unknown) => {
         throw isEncodedConversionError(error) ? decodeConversionError(error) : error
       })
+      // A note from the main-thread half (an SVG render the canvas limits forced
+      // smaller) has to be attached here: the worker never saw the SVG, so it has
+      // nothing to say about it. A worker-side note (a multi-image HEIC) and this one
+      // are mutually exclusive - a file is one source format or the other.
+      .then((result) => (note === undefined ? result : { ...result, note }))
     const { signal } = options
     if (!signal) return work
 
@@ -190,6 +235,29 @@ class ImageEngine implements ConverterEngine<ImageSettings> {
     })
   }
 
+  /**
+   * Hands the worker whatever it can actually work with (E2.3, issue #33).
+   *
+   * Everything but SVG goes across as the original Blob and is decoded in the worker.
+   * SVG cannot be: `createImageBitmap` does not accept it anywhere, and the only thing
+   * that renders it needs DOM APIs a worker has none of. So it is rasterized here and
+   * the bitmap is *transferred* - moved, not copied - which keeps the expensive half
+   * (encoding) in the worker where it belongs.
+   */
+  private async prepare(
+    file: Blob,
+    settings: ImageSettings,
+  ): Promise<{ source: ImageSource; note?: string }> {
+    // `.catch(() => false)` for the same reason the HEIC sniff in convert.ts has one: a
+    // File whose backing bytes have moved or been deleted since intake rejects the read
+    // with a DOMException, and here that would escape as a raw browser error the batch
+    // shows the user verbatim. Falling through hands the Blob to the worker, whose
+    // decode fails with the same wording every other unreadable file gets.
+    if (!(await isSvg(file).catch(() => false))) return { source: file }
+    const { bitmap, note } = await rasterizeSvg(file, Number(settings.scale))
+    return { source: Comlink.transfer(bitmap, [bitmap]), note }
+  }
+
   dispose(): void {
     this.worker.terminate()
   }
@@ -202,7 +270,7 @@ export const imageModule: ConverterModule<ImageSettings> = {
   presentation: {
     item: { singular: 'image', plural: 'images' },
     intakeHint:
-      'HEIC from your phone, plus PNG, JPG, WebP, and AVIF. Mixed formats are fine.',
+      'HEIC from your phone, SVG, plus PNG, JPG, WebP, and AVIF. Mixed formats are fine.',
     // An image has no playing time, so the intake store skips the scan entirely
     // rather than summing zeroes (see FileIntakeStore.recalculateDuration).
     tracksDuration: false,

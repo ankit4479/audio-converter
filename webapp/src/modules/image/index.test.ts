@@ -19,10 +19,14 @@ describe('imageModule.accepts', () => {
     }
   })
 
+  it('takes SVG now that it can rasterize it (E2.3, issue #33)', () => {
+    for (const name of ['logo.svg', 'Icon.SVG']) {
+      expect(imageModule.accepts(meta(name))).toBe(true)
+    }
+  })
+
   it('rejects files it has no decoder for, rather than accepting and failing later', () => {
-    // SVG is #33: it needs a decoder this module doesn't ship yet, so taking it now
-    // would mean accepting a file we then fail on per-file.
-    for (const name of ['logo.svg', 'song.mp3', 'clip.mp4', 'notes.txt']) {
+    for (const name of ['song.mp3', 'clip.mp4', 'notes.txt', 'archive.zip']) {
       expect(imageModule.accepts(meta(name))).toBe(false)
     }
   })
@@ -55,7 +59,7 @@ describe('imageModule contract', () => {
 
   it('never offers a decode-only format as a conversion target anywhere in the graph', () => {
     for (const edge of allEdges()) {
-      expect(['heic', 'heif']).not.toContain(edge.to)
+      expect(['heic', 'heif', 'svg']).not.toContain(edge.to)
     }
   })
 

@@ -98,9 +98,9 @@ const IMAGE_ENCODABLE_FORMATS = [
 ] as const
 
 /**
- * Formats the image module can read but never write (E2.2, issue #32). HEIC encode is
- * an explicit non-goal: the whole point is getting a phone photo into a format
- * everything else can already open.
+ * Formats the image module can read but never write: HEIC and HEIF (E2.2, issue #32),
+ * SVG (E2.3, issue #33). HEIC encode is an explicit non-goal - the whole point is
+ * getting a phone photo into a format everything else can already open.
  *
  * heic and heif are separate nodes rather than one with two extensions because they
  * are separate search intents - people look for "heic to jpg" and "heif to jpg" - and
@@ -109,6 +109,10 @@ const IMAGE_ENCODABLE_FORMATS = [
 const IMAGE_DECODE_ONLY_FORMATS = [
   { id: 'heic', label: 'HEIC', extensions: ['heic'], mime: 'image/heic' },
   { id: 'heif', label: 'HEIF', extensions: ['heif'], mime: 'image/heif' },
+  // SVG is decode-only for the opposite reason to HEIC: not because writing it is
+  // undesirable, but because writing it is a different problem entirely - tracing
+  // pixels into paths, which is #34's own module path, not this one's encoders.
+  { id: 'svg', label: 'SVG', extensions: ['svg'], mime: 'image/svg+xml' },
 ] as const
 
 /** The formats the image module can produce, as a closed union rather than a plain

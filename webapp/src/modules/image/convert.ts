@@ -26,12 +26,19 @@ import { decodeHeif, isHeifContainer } from './heic'
 
 export type { ImageFormatId }
 
+/** How many times the vector's own size to render at. A string because that is what
+ *  SettingField's `select` carries, and the settings object mirrors the schema rather
+ *  than quietly diverging from it. */
+export type SvgScale = '1' | '2' | '3' | '4'
+
 export interface ImageSettings {
   /** Output format. Named `format` rather than `codec` because there is no codec
    *  table here - the browser is the codec. See ConverterModule.targetSettingKey. */
   format: ImageFormatId
   /** 1-100 for the lossy formats. Ignored for PNG, which is lossless. */
   quality: number
+  /** Only used for a vector source, which has no pixel size of its own (E2.3, #33). */
+  scale: SvgScale
 }
 
 const MIME: Record<ImageFormatId, string> = {
@@ -61,8 +68,17 @@ const EXTENSION: Record<ImageFormatId, string> = {
   avif: 'avif',
 }
 
+/**
+ * The bytes to convert, or - for an SVG - the bitmap the main thread already rasterized
+ * from them. SVG cannot be decoded here: `createImageBitmap` does not accept it and the
+ * only thing that renders it needs DOM APIs a worker has none of (see svg.ts). The
+ * bitmap arrives transferred rather than copied, so encoding still happens off the main
+ * thread.
+ */
+export type ImageSource = Blob | ImageBitmap
+
 export async function convertImage(
-  file: Blob,
+  file: ImageSource,
   baseName: string,
   settings: ImageSettings,
   options: {
@@ -71,6 +87,11 @@ export async function convertImage(
   } = {},
 ): Promise<ConvertResult> {
   const { signal, onProgress } = options
+  // An SVG arrives as a bitmap transferred in from the main thread, so this side owns
+  // those pixels the moment the call lands: throwing here without closing it leaks them
+  // for the life of the worker, since the `finally` that frees them on every other path
+  // is not entered yet and the main thread no longer has a handle to close.
+  if (signal?.aborted && !(file instanceof Blob)) file.close()
   throwIfCanceled(signal)
 
   const { bitmap, note } = await decode(file)
@@ -104,7 +125,10 @@ interface Decoded {
   readonly note?: string
 }
 
-async function decode(file: Blob): Promise<Decoded> {
+async function decode(file: ImageSource): Promise<Decoded> {
+  // Already rasterized on the main thread, which is the only place SVG can be.
+  if (!(file instanceof Blob)) return { bitmap: file }
+
   try {
     // imageOrientation is stated rather than left to the default: the spec's default
     // became 'from-image' only in 2021, and engines that still default to 'none'
@@ -140,7 +164,9 @@ async function decodeWithLibheif(file: Blob): Promise<Decoded> {
   // This runs inside decode()'s catch block, so its own try no longer covers it: a
   // failure here (the browser refusing to allocate a second full-size copy of a 48MP
   // photo) would escape as a raw DOMException, which BatchScheduler shows the user
-  // verbatim instead of the per-file sentence every other decode failure gets.
+  // verbatim instead of the wording the batch shows for a decode failure. (That
+  // wording is currently REASON_MESSAGE's fixed string for the reason, not this
+  // module's own message - see #36.)
   let bitmap: ImageBitmap
   try {
     bitmap = await createImageBitmap(data)
