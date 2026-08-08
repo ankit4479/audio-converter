@@ -20,6 +20,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useNavigate } from 'react-router'
 import { useFileIntake } from '../intake/useFileIntake'
+import { CombineConvertView } from '../screens/CombineConvertView'
 import { ConvertView } from '../screens/ConvertView'
 import { SetupView } from '../screens/SetupView'
 import { useConversion } from '../screens/useConversion'
@@ -140,7 +141,18 @@ function ConverterWidget({
 
   // AppState.chooseDestinationAndConvert: prompts for a destination, then starts
   // the batch. Stays on setup if the user cancels the destination picker.
+  //
+  // combine (issue #39) is decided here, not inside the controller: the shell
+  // already has both the module (for combineSettingKey) and the current settings
+  // in scope, and "2+ files" is the same guard the toggle's own visibleIf uses -
+  // one file with combine somehow still true (e.g. a remembered setting from a
+  // larger batch) must run the ordinary single-file path, not combine-with-one.
   const handleConvert = () => {
+    const combineKey = module.combineSettingKey
+    const combine =
+      combineKey !== undefined &&
+      Boolean((settings as Record<string, unknown>)[combineKey]) &&
+      files.length > 1
     void (async () => {
       const started = await controller.start(files, settings, {
         moduleId,
@@ -150,6 +162,7 @@ function ConverterWidget({
         // no extension at all.
         extension: outputExtension(targetFormat) ?? targetFormat,
         label: formatNode(targetFormat)?.label ?? targetFormat,
+        combine,
       })
       if (started) setScreen('convert')
     })()
@@ -192,7 +205,17 @@ function ConverterWidget({
     void navigate(edge.href)
   }
 
-  return screen === 'convert' && conversion.scheduler && conversion.destination ? (
+  return screen === 'convert' && conversion.combine && conversion.destination ? (
+    <CombineConvertView
+      combine={conversion.combine}
+      destination={conversion.destination}
+      targetLabel={conversion.targetLabel}
+      presentation={module.presentation}
+      finalized={conversion.finalized}
+      onChange={handleChange}
+      onConvertMore={handleConvertMore}
+    />
+  ) : screen === 'convert' && conversion.scheduler && conversion.destination ? (
     <ConvertView
       scheduler={conversion.scheduler}
       destination={conversion.destination}
@@ -223,6 +246,7 @@ function ConverterWidget({
             onSettingsChange={handleSettingsChange}
             onTargetCommit={handleTargetCommit}
             source={source}
+            fileCount={files.length}
           />
         }
         onConvert={handleConvert}

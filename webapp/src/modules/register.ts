@@ -11,6 +11,8 @@
 import { register } from '../platform/registry'
 import { audioModule } from './audio'
 import { imageModule } from './image'
+import { pdfModule } from './pdf'
 
 register(audioModule)
 register(imageModule)
+register(pdfModule)

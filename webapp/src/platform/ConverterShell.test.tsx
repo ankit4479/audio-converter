@@ -308,10 +308,12 @@ describe('ConverterShell - a second module', () => {
     ).toBeInTheDocument()
     const target = screen.getByLabelText<HTMLSelectElement>('Convert to')
     expect(target).toHaveValue('webp')
-    // svg is a target too since E2.4 (issue #34): a PNG can be traced.
+    // svg is a target too since E2.4 (issue #34): a PNG can be traced. pdf is a
+    // target since #39: a PNG can become a PDF, owned by a different module.
     expect([...target.options].map((o) => o.value).sort()).toEqual([
       'avif',
       'jpg',
+      'pdf',
       'svg',
       'webp',
     ])

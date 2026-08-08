@@ -232,12 +232,44 @@ const IMAGE_EDGES: readonly ConversionEdge[] = [
   })),
 ]
 
+const PDF_MODULE_ID = 'pdf'
+
+/**
+ * The pdf module (issue #39) has exactly one target: assembling images into a PDF.
+ * jpg/png are the image module's own nodes above (embedJpg/embedPng are the only two
+ * image-embed methods @cantoo/pdf-lib has - no webp/avif source until a canvas
+ * decode-and-reencode-to-PNG detour is built, so this deliberately does not claim
+ * every image format the graph knows about). A source can be a `from` for two
+ * different modules' edges at once - jpg-to-png is still owned by the image module,
+ * jpg-to-pdf by this one - since ConversionEdge.moduleId is per-edge, not per-node.
+ */
+/** Exported so modules/pdf builds its inputFormats from the same source of truth
+ *  the edges above use, the same reasoning every other *_FORMAT_IDS export gives. */
+export const PDF_SOURCES: readonly ImageFormatId[] = ['jpg', 'png']
+
+const PDF_FORMAT_NODES: readonly FormatNode[] = [
+  {
+    id: 'pdf',
+    label: 'PDF',
+    extensions: ['pdf'],
+    mime: 'application/pdf',
+    category: 'pdf',
+  },
+]
+
+const PDF_EDGES: readonly ConversionEdge[] = PDF_SOURCES.map((from) => ({
+  from,
+  to: 'pdf',
+  moduleId: PDF_MODULE_ID,
+}))
+
 const FORMAT_NODES: readonly FormatNode[] = [
   ...AUDIO_FORMAT_NODES,
   ...AUDIO_VIDEO_SOURCE_NODES,
   ...IMAGE_FORMAT_NODES,
+  ...PDF_FORMAT_NODES,
 ]
-const EDGES: readonly ConversionEdge[] = [...AUDIO_EDGES, ...IMAGE_EDGES]
+const EDGES: readonly ConversionEdge[] = [...AUDIO_EDGES, ...IMAGE_EDGES, ...PDF_EDGES]
 
 // FormatId is a flat, cross-category string namespace (module.ts), so nothing stops
 // two categories from registering the same id - e.g. this module's AUDIO_VIDEO_SOURCE

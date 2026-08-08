@@ -57,6 +57,11 @@ export interface CapabilityReport {
 export interface SettingVisibilityContext {
   readonly values: Record<string, unknown>
   readonly source?: FormatId
+  /** How many files are in the current batch, when the caller knows (issue #39's
+   *  "Combine into one PDF" toggle only makes sense for 2+ files). Undefined on a
+   *  hub page or anywhere else file count isn't tracked - a field keying off this
+   *  should treat undefined as "unknown," not as zero. */
+  readonly fileCount?: number
 }
 
 /**
@@ -129,6 +134,26 @@ export interface ConverterEngine<TSettings = Record<string, unknown>> {
   /** Releases the underlying worker. The engine is unusable after this, same
    *  contract as Converter.dispose(). */
   dispose(): void
+
+  /**
+   * Combines every file in a batch into one output (issue #39's "Combine into one
+   * PDF"), rather than converting each independently. Optional and undefined for
+   * every module but PDF today: BatchScheduler's whole job model is one-file-in/
+   * one-file-out, and forcing a many-to-one operation through it would mean one
+   * job silently depending on every other job's result, corrupting its
+   * progress/ETA/cancel semantics for every module, not just the one that needs
+   * this. ConversionController checks for this method directly and calls it
+   * instead of running a normal batch when present and asked for.
+   */
+  combine?(
+    files: readonly Blob[],
+    baseNames: readonly string[],
+    settings: TSettings,
+    options?: {
+      onProgress?: (progress: ConvertProgress) => void
+      signal?: AbortSignal
+    },
+  ): Promise<ConvertResult>
 }
 
 /** A self-contained conversion capability for one category. The platform shell
@@ -179,6 +204,13 @@ export interface ConverterModule<TSettings = Record<string, unknown>> {
    *  shell the output extension and label to run a batch with. Without this the
    *  shell would have to know that audio settings happen to call it `codec`. */
   readonly targetSettingKey: string
+
+  /** Which key of this module's settings, when truthy, means "combine every file
+   *  in the batch into one output" (issue #39) rather than converting each
+   *  independently - `'combine'` for PDF today. Undefined for every module with
+   *  no such mode, which is what tells ConversionController to always run the
+   *  normal per-file batch, the same way an engine with no `combine` method does. */
+  readonly combineSettingKey?: string
 
   readonly settingsSchema: readonly SettingField[]
   readonly defaultSettings: TSettings

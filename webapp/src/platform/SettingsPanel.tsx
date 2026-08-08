@@ -19,21 +19,26 @@ export function SettingsPanel({
   schema,
   values,
   source,
+  fileCount,
   onChange,
 }: {
   schema: readonly SettingField[]
   values: Record<string, unknown>
   /** The page's source format, when it has one - see SettingVisibilityContext. */
   source?: FormatId
+  /** How many files are in the current batch, when the caller tracks one - see
+   *  SettingVisibilityContext. */
+  fileCount?: number
   /** Called with the whole next values object, matching how every other settings
    *  surface in this app reports a change. */
   onChange: (values: Record<string, unknown>) => void
 }) {
   // Filtered here rather than by the caller, so "which fields apply" stays this
   // component's own concern - a caller that pre-filtered would have to duplicate
-  // the { values, source } context shape SettingVisibilityContext already defines.
+  // the context shape SettingVisibilityContext already defines.
   const visible = schema.filter(
-    (field) => field.visibleIf === undefined || field.visibleIf({ values, source }),
+    (field) =>
+      field.visibleIf === undefined || field.visibleIf({ values, source, fileCount }),
   )
   if (visible.length === 0) return null
 

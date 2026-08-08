@@ -156,7 +156,11 @@ describe('image format nodes and edges', () => {
       (edge) =>
         !DECODE_ONLY.includes(edge.from) &&
         edge.from !== TRACE_ONLY_TARGET &&
-        edge.to !== TRACE_ONLY_TARGET,
+        edge.to !== TRACE_ONLY_TARGET &&
+        // jpg/png also feed the pdf module (#39) - a second module's edges off an
+        // image-category source, not part of "every image format encodes to
+        // every other".
+        edge.to !== 'pdf',
     )
     expect(encodableEdges).toHaveLength(IMAGE_FORMATS.length * (IMAGE_FORMATS.length - 1))
     for (const edge of encodableEdges) {
@@ -209,10 +213,13 @@ describe('image format nodes and edges', () => {
     expect(outputExtension('heic')).toBe('heic')
   })
 
-  it('never crosses categories, so no page claims to turn an MP3 into a PNG', () => {
+  it('never crosses categories, so no page claims to turn an MP3 into a PNG - except the pdf module (#39), which deliberately targets image-category sources', () => {
     for (const edge of allEdges()) {
+      if (edge.moduleId === 'pdf') continue
       expect(formatNode(edge.from)?.category).toBe(formatNode(edge.to)?.category)
     }
+    expect(formatNode('jpg')?.category).toBe('image')
+    expect(formatNode('pdf')?.category).toBe('pdf')
   })
 
   it('counts image as a live category now that it has edges', () => {

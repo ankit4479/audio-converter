@@ -124,7 +124,9 @@ export function simplifiedErrorReason(error: unknown): string {
   return error instanceof Error && error.message ? error.message : 'conversion failed'
 }
 
-function baseNameFor(relativePath: string): string {
+/** Exported so ConversionController's combine path (issue #39) names files the
+ *  same way a normal batch does, without a second copy of this logic. */
+export function baseNameFor(relativePath: string): string {
   const fileName = relativePath.slice(relativePath.lastIndexOf('/') + 1)
   const lastDot = fileName.lastIndexOf('.')
   return lastDot <= 0 ? fileName : fileName.slice(0, lastDot)

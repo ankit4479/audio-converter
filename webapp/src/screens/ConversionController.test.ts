@@ -1,6 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JobConverter } from '../engine/batchScheduler'
 import type { AudioFile } from '../intake/audioFile'
+import type { ConverterEngine, ConverterModule } from '../platform/module'
+import { _resetForTests, register } from '../platform/registry'
 import { ConversionController } from './ConversionController'
 
 function audioFile(relativePath: string): AudioFile {
@@ -315,5 +317,140 @@ describe('ConversionController.cancel after the batch has finished', () => {
     expect(scheduler?.failedJobs).toHaveLength(1)
     expect(clickSpy).not.toHaveBeenCalled()
     clickSpy.mockRestore()
+  })
+})
+
+describe('ConversionController.start - combine mode (#39)', () => {
+  const COMBINE_TARGET = {
+    moduleId: 'pdf',
+    extension: 'pdf',
+    label: 'PDF',
+    combine: true,
+  }
+
+  function registerFakePdfModule(
+    combine: ConverterEngine['combine'],
+    dispose: () => void = () => {},
+  ) {
+    const module: ConverterModule = {
+      id: 'pdf',
+      category: 'pdf',
+      label: 'PDF',
+      presentation: {
+        item: { singular: 'image', plural: 'images' },
+        intakeHint: '',
+        tracksDuration: false,
+      },
+      accepts: () => true,
+      inputFormats: ['jpg', 'png'],
+      outputFormats: ['pdf'],
+      targetSettingKey: 'format',
+      combineSettingKey: 'combine',
+      settingsSchema: [],
+      defaultSettings: { format: 'pdf', combine: true },
+      probe: async () => ({ supported: true }),
+      loadEngine: async () => ({ convert: vi.fn(), dispose, combine }),
+    }
+    register(module)
+  }
+
+  beforeEach(() => {
+    _resetForTests()
+  })
+  afterEach(() => {
+    _resetForTests()
+  })
+
+  it('calls the module’s combine() once over every file, instead of running a per-file batch', async () => {
+    const disposeSpy = vi.fn()
+    // The param only exists so combineSpy.mock.calls[0][0] below is typed as the
+    // real files array, not asserted against inside the implementation itself -
+    // underscore-prefixed so tsc's noUnusedParameters leaves it be; eslint's own
+    // no-unused-vars has no such convention configured, hence the disable.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const combineSpy = vi.fn(async (_files: readonly Blob[]) => ({
+      blob: new Blob(['pdf bytes']),
+      fileName: 'combined.pdf',
+    }))
+    registerFakePdfModule(combineSpy, disposeSpy)
+
+    const controller = new ConversionController()
+    window.showDirectoryPicker = fakeDirectoryPicker()
+    const files = [audioFile('a.jpg'), audioFile('b.png')]
+    const started = await controller.start(
+      files,
+      { format: 'pdf', combine: true },
+      COMBINE_TARGET,
+    )
+
+    expect(started).toBe(true)
+    await vi.waitFor(() => expect(controller.getSnapshot().finalized).toBe(true))
+    expect(combineSpy).toHaveBeenCalledTimes(1)
+    expect(combineSpy.mock.calls[0][0]).toHaveLength(2)
+    expect(controller.getSnapshot().scheduler).toBeNull()
+    expect(controller.getSnapshot().combine?.result?.fileName).toBe('combined.pdf')
+    expect(disposeSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports the combine error on the snapshot rather than throwing an unhandled rejection', async () => {
+    registerFakePdfModule(async () => {
+      throw new Error('embed failed')
+    })
+    const controller = new ConversionController()
+    window.showDirectoryPicker = fakeDirectoryPicker()
+
+    await controller.start(
+      [audioFile('a.jpg'), audioFile('b.png')],
+      { format: 'pdf', combine: true },
+      COMBINE_TARGET,
+    )
+    await vi.waitFor(() => expect(controller.getSnapshot().finalized).toBe(true))
+    expect(controller.getSnapshot().combine?.error).toBeInstanceOf(Error)
+  })
+
+  it('cancel() aborts an in-flight combine run via its own AbortController, without an unhandled rejection', async () => {
+    const disposeSpy = vi.fn()
+    const combineSpy = vi.fn(
+      (
+        _files: readonly Blob[],
+        _baseNames: readonly string[],
+        _settings: unknown,
+        options?: { signal?: AbortSignal },
+      ) =>
+        new Promise((_resolve, reject) => {
+          options?.signal?.addEventListener('abort', () => reject(new Error('canceled')))
+        }),
+    )
+    registerFakePdfModule(combineSpy as ConverterEngine['combine'], disposeSpy)
+    const controller = new ConversionController()
+    window.showDirectoryPicker = fakeDirectoryPicker()
+
+    await controller.start(
+      [audioFile('a.jpg'), audioFile('b.png')],
+      { format: 'pdf', combine: true },
+      COMBINE_TARGET,
+    )
+    expect(controller.getSnapshot().finalized).toBe(false)
+    // cancel() must abort the same run's controller, not some other one, and the
+    // rejection this causes must not escape as an unhandled promise rejection -
+    // exactly the reason the "still cancels a batch in flight" test above exists
+    // for the ordinary path.
+    controller.cancel()
+    await vi.waitFor(() => expect(disposeSpy).toHaveBeenCalledTimes(1))
+  })
+
+  it('falls back to the normal per-file batch when target.combine is false, even for a pdf-capable module', async () => {
+    registerFakePdfModule(vi.fn())
+    const controller = new ConversionController(instantConverterFactory())
+    window.showDirectoryPicker = fakeDirectoryPicker()
+
+    const started = await controller.start(
+      [audioFile('a.jpg')],
+      { format: 'pdf', combine: false },
+      { moduleId: 'pdf', extension: 'pdf', label: 'PDF', combine: false },
+    )
+    expect(started).toBe(true)
+    expect(controller.getSnapshot().scheduler).not.toBeNull()
+    expect(controller.getSnapshot().combine).toBeNull()
   })
 })

@@ -31,6 +31,8 @@ export interface ModuleSettingsProps {
   onTargetCommit: (format: FormatId) => void
   /** The format this page converts from, when it is about one specific conversion. */
   source?: FormatId
+  /** How many files are in the current batch - see SettingVisibilityContext. */
+  fileCount?: number
 }
 
 const BESPOKE_PANELS: Record<string, ComponentType<ModuleSettingsProps>> = {
@@ -56,6 +58,7 @@ function SchemaSettings({
   onSettingsChange,
   onTargetCommit,
   source,
+  fileCount,
 }: ModuleSettingsProps) {
   const values = settings as Record<string, unknown>
   const targetKey = module.targetSettingKey
@@ -85,6 +88,7 @@ function SchemaSettings({
         schema={module.settingsSchema.filter((field) => field.key !== targetKey)}
         values={values}
         source={source}
+        fileCount={fileCount}
         onChange={onSettingsChange}
       />
     </>

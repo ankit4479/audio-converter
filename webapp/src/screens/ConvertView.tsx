@@ -59,7 +59,7 @@ export function ConvertView({
 // name, never a full filesystem path (see OutputDestination.destinationLabel).
 const DESTINATION_LABEL_MAX_CHARS = 56
 
-function FolderChip({
+export function FolderChip({
   destination,
   targetLabel,
   onChange,
@@ -233,7 +233,7 @@ function DoneCard({
 // difference") - each output mode does the closest useful thing instead
 // (OutputDestination.revealDestination), and the label says what it actually does
 // rather than promising a Finder reveal it can't deliver.
-function revealButtonLabel(mode: OutputMode): string {
+export function revealButtonLabel(mode: OutputMode): string {
   return mode === 'directory' ? 'Open Destination Folder' : 'Download Again'
 }
 
@@ -257,7 +257,7 @@ function FolderIcon() {
   )
 }
 
-function CheckIcon() {
+export function CheckIcon() {
   return (
     <svg
       width="22"
