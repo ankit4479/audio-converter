@@ -20,7 +20,7 @@ import {
   type ConversionSettings,
 } from '../../engine/codec'
 import { detectAudioEncoders } from '../../engine/webcodecs'
-import { AUDIO_ENCODABLE_TARGETS } from '../../platform/graph'
+import { AUDIO_ENCODABLE_TARGETS, AUDIO_VIDEO_SOURCE_IDS } from '../../platform/graph'
 import type {
   CapabilityReport,
   ConverterEngine,
@@ -112,7 +112,8 @@ export const audioModule: ConverterModule<ConversionSettings> = {
   // strings behind the module contract, so the audio screen reads identically.
   presentation: {
     item: { singular: 'song', plural: 'songs' },
-    intakeHint: 'MP3, FLAC, WAV, AAC, ALAC, Opus, and more. Mixed formats are fine.',
+    intakeHint:
+      'MP3, FLAC, WAV, AAC, ALAC, Opus, and more. Video files work too - we pull out the audio. Mixed formats are fine.',
     tracksDuration: true,
   },
   accepts: (file: FileMeta) => isAudioFileName(file.name),
@@ -120,9 +121,10 @@ export const audioModule: ConverterModule<ConversionSettings> = {
   // it through this name rather than knowing audio's own field names (#31).
   targetSettingKey: 'codec',
   // Matches graph.ts's edge model exactly: any codec can be a nominal source
-  // ("from"), but only AUDIO_ENCODABLE_TARGETS actually have a working encoder
+  // ("from"), and so can a video container (issue #38, extracted for its audio
+  // track), but only AUDIO_ENCODABLE_TARGETS actually have a working encoder
   // ("to") today.
-  inputFormats: CODEC_IDS,
+  inputFormats: [...CODEC_IDS, ...AUDIO_VIDEO_SOURCE_IDS],
   outputFormats: AUDIO_ENCODABLE_TARGETS,
   settingsSchema: SETTINGS_SCHEMA,
   defaultSettings: DEFAULT_SETTINGS,

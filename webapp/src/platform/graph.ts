@@ -70,13 +70,51 @@ export const AUDIO_ENCODABLE_TARGETS: readonly CodecId[] = CODEC_IDS.filter(
 
 const AUDIO_MODULE_ID = 'audio'
 
-const AUDIO_EDGES: readonly ConversionEdge[] = CODEC_IDS.flatMap((from) =>
-  AUDIO_ENCODABLE_TARGETS.filter((to) => to !== from).map((to) => ({
-    from,
-    to,
-    moduleId: AUDIO_MODULE_ID,
-  })),
+/**
+ * Video containers the audio module accepts as a source to extract audio from
+ * (issue #38) - not a new module, since convertFile already discards any video
+ * track and only ever looks for a primary audio track (convert.ts). Limited to
+ * exactly what Mediabunny's ALL_FORMATS demuxes (input-format.js's own array):
+ * MP4, QuickTime/MOV, Matroska/MKV, WebM. AVI is deliberately excluded - no
+ * AviInputFormat exists in Mediabunny and no realistic browser-side AVI demuxer
+ * exists either, so it is not silently promised as a source.
+ *
+ * Read-only, mirroring the image module's IMAGE_DECODE_ONLY_FORMATS shape: these
+ * are sources only, never a `to` target (this app has no video encoder).
+ */
+const AUDIO_VIDEO_SOURCE_FORMATS = [
+  { id: 'mp4', label: 'MP4', extensions: ['mp4', 'm4v'], mime: 'video/mp4' },
+  { id: 'mov', label: 'MOV', extensions: ['mov'], mime: 'video/quicktime' },
+  { id: 'mkv', label: 'MKV', extensions: ['mkv'], mime: 'video/x-matroska' },
+  { id: 'webm', label: 'WebM', extensions: ['webm'], mime: 'video/webm' },
+] as const
+
+const AUDIO_VIDEO_SOURCE_NODES: readonly FormatNode[] = AUDIO_VIDEO_SOURCE_FORMATS.map(
+  (format) => ({ ...format, category: 'audio' as const }),
 )
+
+/** Exported so modules/audio's inputFormats includes these alongside every CodecId,
+ *  the same reason AUDIO_ENCODABLE_TARGETS is exported above. */
+export const AUDIO_VIDEO_SOURCE_IDS: readonly string[] = AUDIO_VIDEO_SOURCE_FORMATS.map(
+  (format) => format.id,
+)
+
+const AUDIO_EDGES: readonly ConversionEdge[] = [
+  ...CODEC_IDS.flatMap((from) =>
+    AUDIO_ENCODABLE_TARGETS.filter((to) => to !== from).map((to) => ({
+      from,
+      to,
+      moduleId: AUDIO_MODULE_ID,
+    })),
+  ),
+  ...AUDIO_VIDEO_SOURCE_FORMATS.flatMap((format) =>
+    AUDIO_ENCODABLE_TARGETS.map((to) => ({
+      from: format.id,
+      to,
+      moduleId: AUDIO_MODULE_ID,
+    })),
+  ),
+]
 
 const IMAGE_MODULE_ID = 'image'
 
@@ -194,8 +232,32 @@ const IMAGE_EDGES: readonly ConversionEdge[] = [
   })),
 ]
 
-const FORMAT_NODES: readonly FormatNode[] = [...AUDIO_FORMAT_NODES, ...IMAGE_FORMAT_NODES]
+const FORMAT_NODES: readonly FormatNode[] = [
+  ...AUDIO_FORMAT_NODES,
+  ...AUDIO_VIDEO_SOURCE_NODES,
+  ...IMAGE_FORMAT_NODES,
+]
 const EDGES: readonly ConversionEdge[] = [...AUDIO_EDGES, ...IMAGE_EDGES]
+
+// FormatId is a flat, cross-category string namespace (module.ts), so nothing stops
+// two categories from registering the same id - e.g. this module's AUDIO_VIDEO_SOURCE
+// nodes ('mp4', 'mov', 'mkv', 'webm') are exactly the ids docs/platform-expansion-plan.md
+// section 4.4 earmarks for the future video module's own encodable targets. A silent
+// Map overwrite would make one category's node (and its edges' labels/extensions)
+// vanish behind the other's without a single failing test. Fail loudly at import time
+// instead of at whatever future PR happens to introduce the collision.
+{
+  const seen = new Set<FormatId>()
+  for (const node of FORMAT_NODES) {
+    if (seen.has(node.id)) {
+      throw new Error(
+        `platform/graph.ts: duplicate format node id "${node.id}" - FormatId must be ` +
+          'unique across every category, not just within one',
+      )
+    }
+    seen.add(node.id)
+  }
+}
 
 const NODES_BY_ID: ReadonlyMap<FormatId, FormatNode> = new Map(
   FORMAT_NODES.map((node) => [node.id, node]),

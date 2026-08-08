@@ -54,8 +54,11 @@ describe('audioModule.accepts', () => {
 })
 
 describe('audioModule format lists', () => {
-  it('inputFormats spans every CodecId - any codec can be a nominal source', () => {
-    expect([...audioModule.inputFormats].sort()).toEqual([...CODEC_IDS].sort())
+  it('inputFormats spans every CodecId plus the video containers it extracts audio from (#38)', () => {
+    const VIDEO_SOURCES = ['mp4', 'mov', 'mkv', 'webm']
+    expect([...audioModule.inputFormats].sort()).toEqual(
+      [...CODEC_IDS, ...VIDEO_SOURCES].sort(),
+    )
   })
 
   it("outputFormats matches the graph's actually-encodable targets exactly", () => {

@@ -88,12 +88,12 @@ describe('SetupView - waveform reduced-motion path (SetupView.swift:244)', () =>
 })
 
 describe('SetupView - drop zone', () => {
-  it('matches the exact copy from SetupView.swift', () => {
+  it('matches the exact copy from SetupView.swift, extended for video sources (#38)', () => {
     renderSetup()
     expect(screen.getByText('Drag songs or folders here')).toBeInTheDocument()
     expect(
       screen.getByText(
-        'MP3, FLAC, WAV, AAC, ALAC, Opus, and more. Mixed formats are fine.',
+        'MP3, FLAC, WAV, AAC, ALAC, Opus, and more. Video files work too - we pull out the audio. Mixed formats are fine.',
       ),
     ).toBeInTheDocument()
     expect(

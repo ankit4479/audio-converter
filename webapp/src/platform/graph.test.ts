@@ -17,9 +17,12 @@ const ENCODABLE_TARGETS = ['mp3', 'aac', 'flac', 'wav', 'opus', 'aiff', 'vorbis'
 const NOT_YET_IMPLEMENTED = ['alac', 'wavpack', 'wma']
 
 describe('audio format nodes', () => {
-  it('has one node per CodecId', () => {
+  it('has one node per CodecId, plus the video containers it extracts audio from (#38)', () => {
     const audioNodes = allFormatNodes().filter((n) => n.category === 'audio')
-    expect(audioNodes.map((n) => n.id).sort()).toEqual([...CODEC_IDS].sort())
+    const VIDEO_SOURCES = ['mp4', 'mov', 'mkv', 'webm']
+    expect(audioNodes.map((n) => n.id).sort()).toEqual(
+      [...CODEC_IDS, ...VIDEO_SOURCES].sort(),
+    )
   })
 
   it('every node exposes a label and its file extension', () => {
@@ -61,6 +64,20 @@ describe('audio edges', () => {
     for (const id of CODEC_IDS) {
       expect(edges.some((e) => e.from === id)).toBe(true)
     }
+  })
+
+  it('video containers (mp4/mov/mkv/webm) are sources into every real encodable target, never a target themselves (#38)', () => {
+    const edges = edgesForCategory('audio')
+    for (const video of ['mp4', 'mov', 'mkv', 'webm']) {
+      for (const target of ENCODABLE_TARGETS) {
+        expect(edges).toContainEqual({ from: video, to: target, moduleId: 'audio' })
+      }
+      expect(edges.some((e) => e.to === video)).toBe(false)
+    }
+  })
+
+  it('avi has no format node at all - not offered as a source', () => {
+    expect(formatNode('avi')).toBeUndefined()
   })
 
   it('edgesForCategory("audio") returns every audio edge and nothing from another category', () => {
