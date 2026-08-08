@@ -153,7 +153,7 @@ describe('ConvertView - done card (ConvertView.swift:70-118)', () => {
     )
     expect(screen.getByText('2 of 5 songs converted')).toBeInTheDocument()
     expect(screen.getByText('3 could not be converted')).toBeInTheDocument()
-    expect(screen.getByText('- a.wav, corrupt file')).toBeInTheDocument()
+    expect(screen.getByText('- a.wav: corrupt file')).toBeInTheDocument()
     expect(screen.queryByText(/and \d+ more/)).not.toBeInTheDocument()
   })
 
@@ -179,7 +179,7 @@ describe('ConvertView - done card (ConvertView.swift:70-118)', () => {
     expect(screen.getByText('0 of 12 songs converted')).toBeInTheDocument()
     expect(screen.getByText('12 could not be converted')).toBeInTheDocument()
     expect(screen.getByText('and 7 more')).toBeInTheDocument()
-    expect(screen.getAllByText(/^- f\d+\.wav, /)).toHaveLength(5)
+    expect(screen.getAllByText(/^- f\d+\.wav: /)).toHaveLength(5)
   })
 
   it('calls onConvertMore when "Convert More" is clicked', async () => {

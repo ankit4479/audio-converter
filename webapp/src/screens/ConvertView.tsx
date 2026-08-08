@@ -192,7 +192,7 @@ function DoneCard({
         <ul className="mx-auto max-w-[380px] space-y-1 text-left text-caption text-text-secondary">
           {shown.map((job) => (
             <li key={job.id}>
-              - {job.file.displayName}, {failureReason(job)}
+              - {job.file.displayName}: {failureReason(job)}
             </li>
           ))}
           {remaining > 0 && <li>and {remaining} more</li>}

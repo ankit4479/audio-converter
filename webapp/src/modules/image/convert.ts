@@ -201,9 +201,7 @@ async function decodeWithLibheif(file: Blob): Promise<Decoded> {
   // This runs inside decode()'s catch block, so its own try no longer covers it: a
   // failure here (the browser refusing to allocate a second full-size copy of a 48MP
   // photo) would escape as a raw DOMException, which BatchScheduler shows the user
-  // verbatim instead of the wording the batch shows for a decode failure. (That
-  // wording is currently REASON_MESSAGE's fixed string for the reason, not this
-  // module's own message - see #36.)
+  // verbatim instead of UNREADABLE_MESSAGE below.
   let bitmap: ImageBitmap
   try {
     bitmap = await createImageBitmap(data)

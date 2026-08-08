@@ -128,14 +128,19 @@ describe('defaultConcurrency (ConversionEngine.swift:32)', () => {
 })
 
 describe('simplifiedErrorReason', () => {
-  it('maps a no-audio-track ConversionError to "no audio track found"', () => {
-    expect(simplifiedErrorReason(new ConversionError('no-audio-track', 'x'))).toBe(
-      'no audio track found',
-    )
+  it("prefers a ConversionError's own message over the fixed phrase for its reason (#36)", () => {
+    expect(
+      simplifiedErrorReason(
+        new ConversionError('unreadable', 'This SVG could not be parsed.'),
+      ),
+    ).toBe('This SVG could not be parsed.')
   })
 
-  it('maps an unreadable ConversionError to "file could not be read"', () => {
-    expect(simplifiedErrorReason(new ConversionError('unreadable', 'x'))).toBe(
+  it('falls back to the fixed phrase when a ConversionError carries no message', () => {
+    expect(simplifiedErrorReason(new ConversionError('no-audio-track', ''))).toBe(
+      'no audio track found',
+    )
+    expect(simplifiedErrorReason(new ConversionError('unreadable', ''))).toBe(
       'file could not be read',
     )
   })
@@ -222,7 +227,7 @@ describe('BatchScheduler - error isolation', () => {
     expect(scheduler.failedJobs).toHaveLength(1)
     expect(scheduler.failedJobs[0]?.status).toEqual({
       kind: 'failed',
-      reason: 'file could not be read',
+      reason: 'corrupt',
     })
     expect(scheduler.isFinished).toBe(true)
   })

@@ -110,12 +110,16 @@ const REASON_MESSAGE: Readonly<Record<ConversionErrorReason, string>> = {
 // ConversionEngine.swift:168-177, adapted from stderr string-matching to our typed
 // ConversionErrorReason (see convert.ts's own header comment for why the browser
 // engine reports errors that way instead).
+//
+// Prefers the module's own message (issue #36) - REASON_MESSAGE's fixed phrase is
+// only a fallback for reasons a module threw with no message beyond the reason itself.
 export function simplifiedErrorReason(error: unknown): string {
   if (error instanceof Error && error.name === 'OutputPermissionDeniedError') {
     return 'permission denied'
   }
   if (isEncodedConversionError(error)) {
-    return REASON_MESSAGE[decodeConversionError(error).reason]
+    const decoded = decodeConversionError(error)
+    return decoded.message.length > 0 ? decoded.message : REASON_MESSAGE[decoded.reason]
   }
   return error instanceof Error && error.message ? error.message : 'conversion failed'
 }

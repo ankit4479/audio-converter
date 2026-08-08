@@ -303,8 +303,10 @@ describe('rasterizeSvg failures', () => {
       'createImageBitmap',
       vi.fn(() => Promise.reject(new DOMException('out of memory'))),
     )
+    // #36: the row shows this sentence verbatim, not a generic "file could not be read".
     await expect(rasterizeSvg(new Blob([SQUARE]), 4)).rejects.toMatchObject({
       reason: 'unreadable',
+      message: expect.stringMatching(/too large to render.*smaller size/i),
     })
     // And the blob URL still goes, the same as every other failure path.
     expect(captured.revoked).toEqual(['blob:fake'])
