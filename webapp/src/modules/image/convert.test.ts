@@ -3,6 +3,7 @@ import { ConversionError } from '../../engine/convert'
 import { convertImage } from './convert'
 import { _resetCanvasSupportForTests, _setCanvasSupportForTests } from './encoders'
 import { _resetLibheifForTests } from './heic'
+import { _resetTracerForTests } from './trace'
 
 /**
  * jsdom implements neither createImageBitmap nor OffscreenCanvas, the same way it has
@@ -62,15 +63,27 @@ function stubImageApis({
   return { convertToBlob, getImageData, drawImage, fillRect, context }
 }
 
-const SETTINGS = { format: 'webp' as const, quality: 80, scale: '1' as const }
+const TRACE_DEFAULTS = {
+  traceColors: '8' as const,
+  traceDespeckle: 8,
+  traceSmoothing: 1,
+}
+
+const SETTINGS = {
+  format: 'webp' as const,
+  quality: 80,
+  scale: '1' as const,
+  ...TRACE_DEFAULTS,
+}
 
 beforeEach(() => {
   closed.length = 0
   _resetCanvasSupportForTests()
-  // heic.ts caches the loaded WASM module across files on purpose (a batch of 200
-  // photos should compile it once), which would otherwise leak one test's fake into
-  // the next.
+  // heic.ts and trace.ts each cache their loaded module across files on purpose (a
+  // batch should compile/fetch once), which would otherwise leak one test's fake
+  // tracer or decoder into the next.
   _resetLibheifForTests()
+  _resetTracerForTests()
 })
 
 afterEach(() => {
@@ -100,6 +113,7 @@ describe('convertImage', () => {
       format: 'webp',
       quality: 80,
       scale: '1' as const,
+      ...TRACE_DEFAULTS,
     })
     expect(convertToBlob).toHaveBeenCalledWith({ type: 'image/webp', quality: 0.8 })
   })
@@ -110,6 +124,7 @@ describe('convertImage', () => {
       format: 'png',
       quality: 80,
       scale: '1' as const,
+      ...TRACE_DEFAULTS,
     })
     expect(convertToBlob).toHaveBeenCalledWith({ type: 'image/png' })
     expect(result.fileName).toBe('a.png')
@@ -123,6 +138,7 @@ describe('convertImage', () => {
       format: 'png',
       quality: 80,
       scale: '1' as const,
+      ...TRACE_DEFAULTS,
     })
     expect(convertToBlob).toHaveBeenCalledTimes(1)
   })
@@ -137,6 +153,7 @@ describe('convertImage', () => {
       format: 'avif',
       quality: 50,
       scale: '1' as const,
+      ...TRACE_DEFAULTS,
     })
 
     expect(getImageData).toHaveBeenCalled()
@@ -168,6 +185,7 @@ describe('convertImage', () => {
         format: 'jpg',
         quality: 80,
         scale: '1' as const,
+        ...TRACE_DEFAULTS,
       }),
     ).rejects.toMatchObject({ reason: 'unsupported-in-browser' })
   })
@@ -190,6 +208,7 @@ describe('convertImage', () => {
         format: 'jpg',
         quality: 80,
         scale: '1' as const,
+        ...TRACE_DEFAULTS,
       }),
     ).rejects.toThrow()
     // A 12MP photo is ~48MB of decoded pixels; leaking one per failed file in a batch
@@ -206,6 +225,126 @@ describe('convertImage', () => {
   })
 })
 
+describe('convertImage - tracing to SVG (E2.4, issue #34)', () => {
+  const SVG_SETTINGS = {
+    format: 'svg' as const,
+    quality: 80,
+    scale: '1' as const,
+    ...TRACE_DEFAULTS,
+  }
+
+  function stubTracer(svg = '<svg><path d="M0 0"/></svg>') {
+    const imagedataToSVG = vi.fn(() => svg)
+    vi.doMock('imagetracerjs', () => ({ default: { imagedataToSVG } }))
+    return { imagedataToSVG }
+  }
+
+  it('leaves the canvas pipeline entirely: names the file .svg and types the blob accordingly', async () => {
+    stubImageApis()
+    stubTracer()
+
+    const result = await convertImage(new Blob(['x']), 'logo', SVG_SETTINGS)
+
+    expect(result.fileName).toBe('logo.svg')
+    expect(result.blob.type).toBe('image/svg+xml')
+    expect(await result.blob.text()).toContain('<path')
+    vi.doUnmock('imagetracerjs')
+  })
+
+  it('gets its pixels from the same canvas path the raster encoders use, not a second decode', async () => {
+    const { drawImage, getImageData } = stubImageApis({ width: 32, height: 16 })
+    const { imagedataToSVG } = stubTracer()
+
+    await convertImage(new Blob(['x']), 'logo', SVG_SETTINGS)
+
+    expect(drawImage).toHaveBeenCalled()
+    expect(getImageData).toHaveBeenCalled()
+    expect(imagedataToSVG).toHaveBeenCalledWith(
+      expect.objectContaining({ width: 32, height: 16 }),
+      expect.anything(),
+    )
+    vi.doUnmock('imagetracerjs')
+  })
+
+  it('frees the decoded bitmap after tracing, the same as every raster target', async () => {
+    stubImageApis()
+    stubTracer()
+
+    await convertImage(new Blob(['x']), 'logo', SVG_SETTINGS)
+
+    expect(closed).toEqual(['bitmap'])
+    vi.doUnmock('imagetracerjs')
+  })
+
+  it('reports only the final progress step - there is no separate encode phase to mark at 0.5', async () => {
+    stubImageApis()
+    stubTracer()
+    const onProgress = vi.fn()
+
+    await convertImage(new Blob(['x']), 'logo', SVG_SETTINGS, { onProgress })
+
+    expect(onProgress.mock.calls.map(([p]) => p.fraction)).toEqual([1])
+    vi.doUnmock('imagetracerjs')
+  })
+
+  it('carries the tracer’s own note (a photo warning) onto the result', async () => {
+    // 32x32 (1024 pixels): an 8x8 canvas has only 64 pixels total, which can never
+    // exceed the 512-distinct-colour threshold looksPhotographic uses no matter how
+    // it's filled - the sample size itself caps the bucket count below the threshold.
+    const width = 32
+    const height = 32
+    const data = new Uint8ClampedArray(width * height * 4)
+    // Deterministic hash (not Math.random, so this is reproducible) that scatters
+    // colours the way real photo noise does - mirrors trace.test.ts's own generator.
+    const hash = (n: number) => {
+      n = n ^ 61 ^ (n >>> 16)
+      n = n + (n << 3)
+      n = n ^ (n >>> 4)
+      n = Math.imul(n, 0x27d4eb2d)
+      n = n ^ (n >>> 15)
+      return n >>> 0
+    }
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const h = hash((x * 73856093) ^ (y * 19349663))
+        const offset = (y * width + x) * 4
+        data[offset] = h & 0xff
+        data[offset + 1] = (h >>> 8) & 0xff
+        data[offset + 2] = (h >>> 16) & 0xff
+        data[offset + 3] = 255
+      }
+    }
+    const { context } = stubImageApis({ width, height })
+    // getImageData's default stub returns a fresh, zeroed array on every call; that
+    // would silently discard the fill above, so the mock's return value is overridden
+    // directly rather than mutating what a call happens to hand back.
+    context.getImageData.mockReturnValue({ width, height, data })
+    stubTracer()
+
+    const result = await convertImage(new Blob(['x']), 'photo', SVG_SETTINGS)
+
+    expect(result.note).toMatch(/looks like a photo/i)
+    vi.doUnmock('imagetracerjs')
+  })
+
+  it('propagates a tracing failure as a typed per-file error, and still frees the bitmap', async () => {
+    stubImageApis()
+    vi.doMock('imagetracerjs', () => ({
+      default: {
+        imagedataToSVG: () => {
+          throw new Error('tracer blew up')
+        },
+      },
+    }))
+
+    await expect(
+      convertImage(new Blob(['x']), 'logo', SVG_SETTINGS),
+    ).rejects.toMatchObject({ reason: 'unknown' })
+    expect(closed).toEqual(['bitmap'])
+    vi.doUnmock('imagetracerjs')
+  })
+})
+
 describe('convertImage - alpha handling', () => {
   it('paints an opaque matte under the image for JPEG, which has no alpha channel', async () => {
     const { fillRect, context } = stubImageApis({ width: 320, height: 240 })
@@ -215,6 +354,7 @@ describe('convertImage - alpha handling', () => {
       format: 'jpg',
       quality: 80,
       scale: '1' as const,
+      ...TRACE_DEFAULTS,
     })
 
     // Without this, a transparent PNG's see-through regions encode as black: a
@@ -228,7 +368,12 @@ describe('convertImage - alpha handling', () => {
       const { fillRect } = stubImageApis()
       _setCanvasSupportForTests('image/webp', true)
       _setCanvasSupportForTests('image/avif', true)
-      await convertImage(new Blob(['x']), 'a', { format, quality: 80, scale: '1' })
+      await convertImage(new Blob(['x']), 'a', {
+        format,
+        quality: 80,
+        scale: '1',
+        ...TRACE_DEFAULTS,
+      })
       expect(fillRect).not.toHaveBeenCalled()
       vi.unstubAllGlobals()
     }
@@ -341,6 +486,7 @@ describe('convertImage - HEIC fallback', () => {
       format: 'jpg',
       quality: 80,
       scale: '1' as const,
+      ...TRACE_DEFAULTS,
     })
 
     expect(decode).toHaveBeenCalledTimes(1)
@@ -362,6 +508,7 @@ describe('convertImage - HEIC fallback', () => {
       format: 'jpg',
       quality: 80,
       scale: '1' as const,
+      ...TRACE_DEFAULTS,
     })
 
     expect(result.note).toBe(
@@ -383,6 +530,7 @@ describe('convertImage - HEIC fallback', () => {
         format: 'jpg',
         quality: 80,
         scale: '1' as const,
+        ...TRACE_DEFAULTS,
       })
     }
 
@@ -427,6 +575,7 @@ describe('convertImage - HEIC fallback', () => {
         format: 'jpg',
         quality: 80,
         scale: '1' as const,
+        ...TRACE_DEFAULTS,
       }),
     ).rejects.toMatchObject({ reason: 'unreadable' })
     vi.doUnmock('libheif-js/libheif-wasm/libheif-bundle.mjs')
@@ -443,6 +592,7 @@ describe('convertImage - HEIC fallback', () => {
         format: 'jpg',
         quality: 80,
         scale: '1' as const,
+        ...TRACE_DEFAULTS,
       }),
     ).rejects.toMatchObject({ reason: 'unreadable' })
     expect(decode).not.toHaveBeenCalled()

@@ -133,9 +133,18 @@ export const IMAGE_FORMAT_IDS: readonly ImageFormatId[] = IMAGE_ENCODABLE_FORMAT
   (format) => format.id,
 )
 
+/** Every format the image module can produce: the raster encoders' targets plus SVG,
+ *  which is produced by tracing rather than encoding (E2.4, issue #34). */
+export type ImageOutputFormatId = ImageFormatId | 'svg'
+
 export const IMAGE_INPUT_FORMAT_IDS: readonly ImageInputFormatId[] = [
   ...IMAGE_FORMAT_IDS,
   ...IMAGE_DECODE_ONLY_FORMATS.map((format) => format.id),
+]
+
+export const IMAGE_OUTPUT_FORMAT_IDS: readonly ImageOutputFormatId[] = [
+  ...IMAGE_FORMAT_IDS,
+  'svg',
 ]
 
 const IMAGE_FORMAT_NODES: readonly FormatNode[] = [
@@ -147,6 +156,17 @@ const IMAGE_FORMAT_NODES: readonly FormatNode[] = [
  *  universally openable, and the scope #32 defined. They deliberately do not reach
  *  AVIF, unlike every encodable source: see that issue's closing note. */
 const DECODE_ONLY_TARGETS: readonly ImageFormatId[] = ['jpg', 'png', 'webp']
+
+/**
+ * Raster formats that can be traced into SVG (E2.4, issue #34). Only these two: a
+ * traced photo is worse than the photo in every way, so the sources offered are the
+ * ones people actually have flat artwork in. WebP and AVIF are a deliberate non-goal
+ * of that issue, not an oversight.
+ *
+ * This is what makes `svg` both a source (rasterize, #33) and a target (trace) while
+ * `svg-to-svg` never exists - the two lists never overlap.
+ */
+const TRACEABLE_SOURCES: readonly ImageFormatId[] = ['png', 'jpg']
 
 const IMAGE_EDGES: readonly ConversionEdge[] = [
   ...IMAGE_ENCODABLE_FORMATS.flatMap((from) =>
@@ -163,6 +183,11 @@ const IMAGE_EDGES: readonly ConversionEdge[] = [
       moduleId: IMAGE_MODULE_ID,
     })),
   ),
+  ...TRACEABLE_SOURCES.map((from) => ({
+    from,
+    to: 'svg',
+    moduleId: IMAGE_MODULE_ID,
+  })),
 ]
 
 const FORMAT_NODES: readonly FormatNode[] = [...AUDIO_FORMAT_NODES, ...IMAGE_FORMAT_NODES]

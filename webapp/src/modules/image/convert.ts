@@ -20,8 +20,9 @@ import {
 // image worker's chunk. Taking the union from the graph rather than restating it here
 // is what makes the tables below fail to compile if a format is added to the graph
 // without an entry, instead of producing a blob typed `undefined` at runtime.
-import type { ImageFormatId } from '../../platform/graph'
+import type { ImageFormatId, ImageOutputFormatId } from '../../platform/graph'
 import { canvasEncodes, encodeWithWasm, type EncodableMime } from './encoders'
+import { traceToSvg, type TraceSettings } from './trace'
 import { decodeHeif, isHeifContainer } from './heic'
 
 export type { ImageFormatId }
@@ -31,10 +32,11 @@ export type { ImageFormatId }
  *  than quietly diverging from it. */
 export type SvgScale = '1' | '2' | '3' | '4'
 
-export interface ImageSettings {
+export interface ImageSettings extends TraceSettings {
   /** Output format. Named `format` rather than `codec` because there is no codec
-   *  table here - the browser is the codec. See ConverterModule.targetSettingKey. */
-  format: ImageFormatId
+   *  table here - the browser is the codec. `svg` is produced by tracing rather than
+   *  encoding (E2.4, issue #34). See ConverterModule.targetSettingKey. */
+  format: ImageOutputFormatId
   /** 1-100 for the lossy formats. Ignored for PNG, which is lossless. */
   quality: number
   /** Only used for a vector source, which has no pixel size of its own (E2.3, #33). */
@@ -102,6 +104,25 @@ export async function convertImage(
   // cancelled 12MP photo, which is the leak the close() below exists to prevent.
   try {
     throwIfCanceled(signal)
+
+    // SVG leaves the canvas pipeline entirely: there is nothing to encode, only regions
+    // to find and paths to fit. Every decoder above still applies, so this gets the same
+    // pixels any other target would.
+    // Captured before the check so TypeScript narrows it to the raster formats below.
+    const format = settings.format
+    if (format === 'svg') {
+      const traced = await traceToSvg(pixelsOf(bitmap), settings)
+      throwIfCanceled(signal)
+      onProgress?.({ fraction: 1, processedSeconds: 0 })
+      return {
+        blob: new Blob([traced.svg], { type: 'image/svg+xml' }),
+        fileName: `${baseName}.svg`,
+        // A trace note (this looks like a photo) is about the same file as a decode note
+        // (this HEIC held several images) and both are worth saying, but the row shows
+        // one; the trace note is the more actionable of the two.
+        note: traced.note ?? note,
+      }
+    }
     // Decode is the slow half for a large photo and there is no sub-step to report
     // from inside it, so progress is reported at the one honest boundary rather than
     // faked as a smooth ramp. processedSeconds is 0 throughout: it is the audio
@@ -109,10 +130,10 @@ export async function convertImage(
     // reporting anything else would be inventing a number.
     onProgress?.({ fraction: 0.5, processedSeconds: 0 })
 
-    const blob = await encode(bitmap, settings)
+    const blob = await encode(bitmap, format, settings.quality)
     throwIfCanceled(signal)
     onProgress?.({ fraction: 1, processedSeconds: 0 })
-    return { blob, fileName: `${baseName}.${EXTENSION[settings.format]}`, note }
+    return { blob, fileName: `${baseName}.${EXTENSION[format]}`, note }
   } finally {
     // Frees the decoded pixels immediately rather than waiting for GC - a batch of
     // 12MP photos holds ~48MB each otherwise.
@@ -182,23 +203,29 @@ async function decodeWithLibheif(file: Blob): Promise<Decoded> {
   }
 }
 
-async function encode(bitmap: ImageBitmap, settings: ImageSettings): Promise<Blob> {
-  const { format, quality } = settings
-  const mime = MIME[format]
-  // Every encode path here starts on a canvas (the WASM one reads its pixels back
-  // off one), so a browser without OffscreenCanvas cannot write an image at all.
-  // Said as a ConversionError rather than left to `new OffscreenCanvas` throwing a
-  // bare ReferenceError, which BatchScheduler.simplifiedErrorReason would put in
-  // front of the user verbatim as "OffscreenCanvas is not defined". This is the same
-  // condition imageModule.probe() reports, for browsers reached before anything
-  // consults the probe.
+/**
+ * Opens a canvas and its 2D context, reporting both ways that can fail as typed per-file
+ * errors rather than raw browser exceptions.
+ *
+ * Every path in this module needs pixels on a canvas: the encoders write from one, the
+ * WASM encoders read their pixels back off one, and the tracer needs the ImageData only
+ * a canvas can produce. Said as ConversionErrors because
+ * BatchScheduler.simplifiedErrorReason puts anything else in front of the user verbatim
+ * - a bare `new OffscreenCanvas` would read as "OffscreenCanvas is not defined". This is
+ * the same condition imageModule.probe() reports, for browsers reached before anything
+ * consults the probe.
+ */
+function openCanvas(
+  width: number,
+  height: number,
+): { canvas: OffscreenCanvas; context: OffscreenCanvasRenderingContext2D } {
   if (typeof OffscreenCanvas === 'undefined') {
     throw new ConversionError(
       'unsupported-in-browser',
       'This browser is missing the image APIs this converter needs. Try the latest Chrome, Edge, Firefox, or Safari.',
     )
   }
-  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height)
+  const canvas = new OffscreenCanvas(width, height)
   const context = canvas.getContext('2d')
   if (!context) {
     throw new ConversionError(
@@ -206,6 +233,26 @@ async function encode(bitmap: ImageBitmap, settings: ImageSettings): Promise<Blo
       'This browser could not open a canvas to write the image with.',
     )
   }
+  return { canvas, context }
+}
+
+/** The decoded pixels, which the tracer needs and a canvas is the only way to get. */
+function pixelsOf(bitmap: ImageBitmap): ImageData {
+  const { context } = openCanvas(bitmap.width, bitmap.height)
+  context.drawImage(bitmap, 0, 0)
+  return context.getImageData(0, 0, bitmap.width, bitmap.height)
+}
+
+async function encode(
+  bitmap: ImageBitmap,
+  // Narrowed to the raster formats: the SVG target returns from convertImage before
+  // reaching here, which is what keeps MIME/EXTENSION/SUPPORTS_ALPHA exhaustive over
+  // exactly the formats a canvas can write.
+  format: ImageFormatId,
+  quality: number,
+): Promise<Blob> {
+  const mime = MIME[format]
+  const { canvas, context } = openCanvas(bitmap.width, bitmap.height)
   // JPEG has no alpha channel, and a fresh 2D canvas is transparent *black* - so
   // drawing a transparent PNG straight onto it and encoding as JPEG turns every
   // see-through region black. Measured on a translucent test image: the transparent

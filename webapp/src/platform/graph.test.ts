@@ -113,7 +113,10 @@ describe('slug round-trip', () => {
 // E2.1 (issue #31): the graph stopped being audio-only.
 describe('image format nodes and edges', () => {
   const IMAGE_FORMATS = ['png', 'jpg', 'webp', 'avif']
-  const DECODE_ONLY = ['heic', 'heif', 'svg']
+  // heic/heif are read but never written. svg is read (rasterize, #33) *and* written
+  // (trace, #34), so it belongs in neither list on its own.
+  const DECODE_ONLY = ['heic', 'heif']
+  const TRACE_ONLY_TARGET = 'svg'
 
   it('has a node per image format, each with a MIME type and an extension', () => {
     for (const id of [...IMAGE_FORMATS, ...DECODE_ONLY]) {
@@ -132,7 +135,10 @@ describe('image format nodes and edges', () => {
 
   it('connects every encodable image format to every other, in both directions, never to itself', () => {
     const encodableEdges = edgesForCategory('image').filter(
-      (edge) => !DECODE_ONLY.includes(edge.from),
+      (edge) =>
+        !DECODE_ONLY.includes(edge.from) &&
+        edge.from !== TRACE_ONLY_TARGET &&
+        edge.to !== TRACE_ONLY_TARGET,
     )
     expect(encodableEdges).toHaveLength(IMAGE_FORMATS.length * (IMAGE_FORMATS.length - 1))
     for (const edge of encodableEdges) {
@@ -158,13 +164,25 @@ describe('image format nodes and edges', () => {
     expect(moduleForEdge('heic', 'avif')).toBeUndefined()
   })
 
-  it('gives SVG a node too, decode-only for a different reason (E2.3, issue #33)', () => {
-    // Not because writing SVG is undesirable, but because writing it means tracing
-    // pixels into paths - a different problem, and #34's.
+  it('gives SVG a node that is both a source and a target, but never both at once', () => {
     expect(formatNode('svg')?.label).toBe('SVG')
     expect(formatNode('svg')?.mime).toBe('image/svg+xml')
-    expect(allEdges().some((edge) => edge.to === 'svg')).toBe(false)
+    // Rasterized from (#33) and traced to (#34), and there is no svg-to-svg.
     expect(moduleForEdge('svg', 'png')).toBe('image')
+    expect(moduleForEdge('png', 'svg')).toBe('image')
+    expect(moduleForEdge('svg', 'svg')).toBeUndefined()
+  })
+
+  // E2.4 (issue #34): only flat-artwork sources are offered for tracing.
+  it('offers tracing only from PNG and JPG, the formats flat artwork actually arrives in', () => {
+    expect(
+      allEdges()
+        .filter((edge) => edge.to === 'svg')
+        .map((edge) => edge.from)
+        .sort(),
+    ).toEqual(['jpg', 'png'])
+    expect(moduleForEdge('webp', 'svg')).toBeUndefined()
+    expect(moduleForEdge('heic', 'svg')).toBeUndefined()
   })
 
   it('gives HEIC its own node so it has its own indexable page, separate from HEIF', () => {

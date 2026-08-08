@@ -59,7 +59,7 @@ describe('imageModule contract', () => {
 
   it('never offers a decode-only format as a conversion target anywhere in the graph', () => {
     for (const edge of allEdges()) {
-      expect(['heic', 'heif', 'svg']).not.toContain(edge.to)
+      expect(['heic', 'heif']).not.toContain(edge.to)
     }
   })
 

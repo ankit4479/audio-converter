@@ -20,8 +20,8 @@ import {
 } from '../../engine/convert'
 import {
   formatNode,
-  IMAGE_FORMAT_IDS,
   IMAGE_INPUT_FORMAT_IDS,
+  IMAGE_OUTPUT_FORMAT_IDS,
 } from '../../platform/graph'
 import type {
   CapabilityReport,
@@ -32,7 +32,7 @@ import type {
   FileMeta,
   SettingField,
 } from '../../platform/module'
-import type { ImageFormatId, ImageSettings, ImageSource } from './convert'
+import type { ImageSettings, ImageSource } from './convert'
 import { isSvg, rasterizeSvg } from './svg'
 
 /** Input extensions this module accepts. Broader than the graph's output formats:
@@ -53,7 +53,6 @@ const INPUT_EXTENSIONS = [
  *  from there) rather than a second hand-written list: every image format is both a
  *  source and a target, so the graph's node set *is* this module's input and output
  *  set, and a copy could only ever drift from it. */
-const IMAGE_FORMATS: readonly ImageFormatId[] = IMAGE_FORMAT_IDS
 
 /** WebP as the default target: it is the format that is both broadly supported and
  *  materially smaller than the PNG or JPEG most people arrive with, which is the
@@ -64,6 +63,11 @@ const DEFAULT_SETTINGS: ImageSettings = {
   // 1x: a vector's own declared size is what its author intended, so anything else
   // has to be asked for.
   scale: '1',
+  // Tracing defaults aimed at flat artwork, which is what tracing is for: few colours,
+  // a little speckle removal, a little smoothing.
+  traceColors: '8',
+  traceDespeckle: 8,
+  traceSmoothing: 1,
 }
 
 /**
@@ -82,7 +86,7 @@ const SETTINGS_SCHEMA: readonly SettingField[] = [
     // spelled 'jpg' as "JPG" and 'webp' as "WEBP" while every other surface in the
     // app (the "Convert to" control, the h1, the mega-menu, Cmd+K) calls them
     // "JPEG" and "WebP", because those all read formatNode().label.
-    options: IMAGE_FORMATS.map((id) => ({
+    options: IMAGE_OUTPUT_FORMAT_IDS.map((id) => ({
       value: id,
       label: formatNode(id)?.label ?? id.toUpperCase(),
     })),
@@ -99,6 +103,34 @@ const SETTINGS_SCHEMA: readonly SettingField[] = [
   // issue #33). It shows on raster pages too for now, where it does nothing; making
   // fields conditional on the source and target is #35's work, alongside the same
   // treatment for the quality slider above.
+  // Only meaningful when the target is SVG. Conditional visibility is #35's work.
+  {
+    kind: 'select',
+    key: 'traceColors',
+    label: 'Colours (tracing)',
+    options: [
+      { value: '2', label: '2' },
+      { value: '4', label: '4' },
+      { value: '8', label: '8' },
+      { value: '16', label: '16' },
+    ],
+  },
+  {
+    kind: 'slider',
+    key: 'traceDespeckle',
+    label: 'Despeckle (tracing)',
+    min: 0,
+    max: 32,
+    step: 1,
+  },
+  {
+    kind: 'slider',
+    key: 'traceSmoothing',
+    label: 'Smoothing (tracing)',
+    min: 0,
+    max: 4,
+    step: 1,
+  },
   {
     kind: 'select',
     key: 'scale',
@@ -281,7 +313,8 @@ export const imageModule: ConverterModule<ImageSettings> = {
   // Input and output differ since #32: HEIC can be read but is deliberately never
   // written, which is the whole point of converting one.
   inputFormats: IMAGE_INPUT_FORMAT_IDS,
-  outputFormats: IMAGE_FORMATS,
+  // SVG is here as of E2.4 (issue #34): produced by tracing, not by an encoder.
+  outputFormats: IMAGE_OUTPUT_FORMAT_IDS,
   settingsSchema: SETTINGS_SCHEMA,
   defaultSettings: DEFAULT_SETTINGS,
   probe,
