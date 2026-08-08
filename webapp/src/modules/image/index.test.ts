@@ -103,3 +103,60 @@ describe('imageModule.probe', () => {
     }
   })
 })
+
+describe('imageModule settings schema — field visibility (E2.5, issue #35)', () => {
+  function fieldByKey(key: string) {
+    const field = imageModule.settingsSchema.find((f) => f.key === key)
+    if (!field) throw new Error(`no field with key ${key}`)
+    return field
+  }
+
+  it('shows Quality only for a lossy raster target, not lossless PNG and not traced SVG', () => {
+    const quality = fieldByKey('quality')
+    expect(quality.visibleIf?.({ values: { format: 'jpg' } })).toBe(true)
+    expect(quality.visibleIf?.({ values: { format: 'webp' } })).toBe(true)
+    expect(quality.visibleIf?.({ values: { format: 'avif' } })).toBe(true)
+    expect(quality.visibleIf?.({ values: { format: 'png' } })).toBe(false)
+    expect(quality.visibleIf?.({ values: { format: 'svg' } })).toBe(false)
+  })
+
+  it('shows Resize for every raster target and hides it for SVG, which is traced not encoded', () => {
+    const resize = fieldByKey('resize')
+    for (const format of ['png', 'jpg', 'webp', 'avif']) {
+      expect(resize.visibleIf?.({ values: { format } })).toBe(true)
+    }
+    expect(resize.visibleIf?.({ values: { format: 'svg' } })).toBe(false)
+  })
+
+  it('shows Background only for a target that drops alpha (today, only JPEG)', () => {
+    const background = fieldByKey('backgroundColor')
+    expect(background.visibleIf?.({ values: { format: 'jpg' } })).toBe(true)
+    for (const format of ['png', 'webp', 'avif', 'svg']) {
+      expect(background.visibleIf?.({ values: { format } })).toBe(false)
+    }
+  })
+
+  it('shows the tracing knobs only when the target is SVG', () => {
+    for (const key of ['traceColors', 'traceDespeckle', 'traceSmoothing']) {
+      const field = fieldByKey(key)
+      expect(field.visibleIf?.({ values: { format: 'svg' } })).toBe(true)
+      expect(field.visibleIf?.({ values: { format: 'png' } })).toBe(false)
+      expect(field.visibleIf?.({ values: { format: 'jpg' } })).toBe(false)
+    }
+  })
+
+  it('shows the SVG render scale only when the *source* is SVG, regardless of the target', () => {
+    const scale = fieldByKey('scale')
+    expect(scale.visibleIf?.({ values: { format: 'webp' }, source: 'svg' })).toBe(true)
+    expect(scale.visibleIf?.({ values: { format: 'svg' }, source: 'svg' })).toBe(true)
+    // Wrong axis: a PNG target does not make this visible just because the format
+    // *string* happens to look similar - only the source format controls it.
+    expect(scale.visibleIf?.({ values: { format: 'png' }, source: 'png' })).toBe(false)
+    // No source at all (a hub page) - still hidden.
+    expect(scale.visibleIf?.({ values: { format: 'webp' } })).toBe(false)
+  })
+
+  it('never gives the target-format field itself a visibleIf - it is always meaningful', () => {
+    expect(fieldByKey('format').visibleIf).toBeUndefined()
+  })
+})

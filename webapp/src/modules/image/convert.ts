@@ -32,6 +32,14 @@ export type { ImageFormatId }
  *  than quietly diverging from it. */
 export type SvgScale = '1' | '2' | '3' | '4'
 
+/** A cap on the output's longer side, or 'original' for none (E2.5, issue #35). A
+ *  fixed preset list rather than free-form width/height: it can never distort the
+ *  aspect ratio (there is only one number to honor, not two to reconcile), and there
+ *  is no NaN/negative/absurd-value story to validate - the same reasoning
+ *  MAX_DIMENSION/MAX_AREA in svg.ts already uses for the same class of problem. Only
+ *  meaningful for a raster target; hidden entirely for SVG (see the schema). */
+export type ResizeOption = 'original' | '3840' | '1920' | '1280' | '640'
+
 export interface ImageSettings extends TraceSettings {
   /** Output format. Named `format` rather than `codec` because there is no codec
    *  table here - the browser is the codec. `svg` is produced by tracing rather than
@@ -41,6 +49,14 @@ export interface ImageSettings extends TraceSettings {
   quality: number
   /** Only used for a vector source, which has no pixel size of its own (E2.3, #33). */
   scale: SvgScale
+  /** See ResizeOption. Ignored for an SVG target. */
+  resize: ResizeOption
+  /** Matte painted under a target that drops alpha (today, only JPEG) before the
+   *  source is drawn - a fresh 2D canvas is transparent *black*, not white, so
+   *  without this every see-through region of a transparent source would encode as
+   *  near-black. Was a hardcoded '#ffffff'; this is that same default, now a
+   *  setting. */
+  backgroundColor: string
 }
 
 const MIME: Record<ImageFormatId, string> = {
@@ -130,7 +146,7 @@ export async function convertImage(
     // reporting anything else would be inventing a number.
     onProgress?.({ fraction: 0.5, processedSeconds: 0 })
 
-    const blob = await encode(bitmap, format, settings.quality)
+    const blob = await encode(bitmap, format, settings)
     throwIfCanceled(signal)
     onProgress?.({ fraction: 1, processedSeconds: 0 })
     return { blob, fileName: `${baseName}.${EXTENSION[format]}`, note }
@@ -243,27 +259,51 @@ function pixelsOf(bitmap: ImageBitmap): ImageData {
   return context.getImageData(0, 0, bitmap.width, bitmap.height)
 }
 
+/** The output's actual dimensions once `resize` is applied: capped to the chosen
+ *  preset's longer side, aspect ratio preserved by construction (one number scales
+ *  both sides by the same factor), never upscaled (a preset bigger than the source
+ *  is a no-op, not an invitation to blow a small image up). */
+function fitToResize(
+  width: number,
+  height: number,
+  resize: ResizeOption,
+): { width: number; height: number } {
+  if (resize === 'original') return { width, height }
+  const max = Number(resize)
+  const longest = Math.max(width, height)
+  if (longest <= max) return { width, height }
+  const factor = max / longest
+  return {
+    width: Math.max(1, Math.round(width * factor)),
+    height: Math.max(1, Math.round(height * factor)),
+  }
+}
+
 async function encode(
   bitmap: ImageBitmap,
   // Narrowed to the raster formats: the SVG target returns from convertImage before
   // reaching here, which is what keeps MIME/EXTENSION/SUPPORTS_ALPHA exhaustive over
   // exactly the formats a canvas can write.
   format: ImageFormatId,
-  quality: number,
+  settings: ImageSettings,
 ): Promise<Blob> {
+  const { quality, resize, backgroundColor } = settings
   const mime = MIME[format]
-  const { canvas, context } = openCanvas(bitmap.width, bitmap.height)
+  // The canvas is opened at the *resized* dimensions, not the bitmap's own - drawImage
+  // below then does the actual scaling as part of the same draw that copies the pixels
+  // in, rather than a separate resample pass.
+  const { width, height } = fitToResize(bitmap.width, bitmap.height, resize)
+  const { canvas, context } = openCanvas(width, height)
   // JPEG has no alpha channel, and a fresh 2D canvas is transparent *black* - so
   // drawing a transparent PNG straight onto it and encoding as JPEG turns every
   // see-through region black. Measured on a translucent test image: the transparent
   // band came out rgb(1, 28, 37). Filling an opaque matte first is what every other
-  // converter does, and white is the conventional choice. #35 makes the colour a
-  // setting; this is the default it will start from.
+  // converter does; backgroundColor is that matte, defaulting to white.
   if (!SUPPORTS_ALPHA[format]) {
-    context.fillStyle = '#ffffff'
-    context.fillRect(0, 0, bitmap.width, bitmap.height)
+    context.fillStyle = backgroundColor
+    context.fillRect(0, 0, width, height)
   }
-  context.drawImage(bitmap, 0, 0)
+  context.drawImage(bitmap, 0, 0, width, height)
 
   // PNG needs no probe (it is the format canvas always implements) and takes no
   // quality; everything else asks canvas first and falls back to WASM.
@@ -284,7 +324,7 @@ async function encode(
     )
   }
 
-  const data = context.getImageData(0, 0, bitmap.width, bitmap.height)
+  const data = context.getImageData(0, 0, width, height)
   return encodeWithWasm(mime as 'image/webp' | 'image/avif', data, quality)
 }
 

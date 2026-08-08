@@ -84,6 +84,7 @@ function SchemaSettings({
         // page two controls for one value, only one of which navigates.
         schema={module.settingsSchema.filter((field) => field.key !== targetKey)}
         values={values}
+        source={source}
         onChange={onSettingsChange}
       />
     </>

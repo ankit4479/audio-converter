@@ -63,10 +63,16 @@ function stubImageApis({
   return { convertToBlob, getImageData, drawImage, fillRect, context }
 }
 
+// Named for the fields it originally covered; also carries the #35 defaults
+// (resize/backgroundColor) now, since every ImageSettings fixture in this file
+// already spreads it and duplicating a second constant everywhere those call
+// sites live would just be more places to forget to update.
 const TRACE_DEFAULTS = {
   traceColors: '8' as const,
   traceDespeckle: 8,
   traceSmoothing: 1,
+  resize: 'original' as const,
+  backgroundColor: '#ffffff',
 }
 
 const SETTINGS = {
@@ -377,6 +383,127 @@ describe('convertImage - alpha handling', () => {
       expect(fillRect).not.toHaveBeenCalled()
       vi.unstubAllGlobals()
     }
+  })
+
+  it('paints the chosen background colour instead of the white default (E2.5, issue #35)', async () => {
+    const { context } = stubImageApis({ width: 320, height: 240 })
+    _setCanvasSupportForTests('image/jpeg', true)
+
+    await convertImage(new Blob(['x']), 'a', {
+      format: 'jpg',
+      quality: 80,
+      scale: '1' as const,
+      ...TRACE_DEFAULTS,
+      backgroundColor: '#00ff00',
+    })
+
+    expect(context.fillStyle).toBe('#00ff00')
+  })
+})
+
+describe('convertImage - resize (E2.5, issue #35)', () => {
+  it('opens the canvas at the resized dimensions and draws the bitmap scaled into it', async () => {
+    const { drawImage } = stubImageApis({ width: 4000, height: 2000 })
+    _setCanvasSupportForTests('image/webp', true)
+
+    await convertImage(new Blob(['x']), 'a', {
+      format: 'webp',
+      quality: 80,
+      scale: '1' as const,
+      ...TRACE_DEFAULTS,
+      resize: '1920',
+    })
+
+    // 4000x2000 is 2:1; capping the longer side at 1920 gives 1920x960, the exact
+    // same ratio - the point of scaling both sides by one factor rather than fitting
+    // width and height independently. The destination width/height on drawImage are
+    // what actually resample the pixels; the canvas dimensions alone would just clip.
+    expect(drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, 1920, 960)
+  })
+
+  it('scales both dimensions by the same factor, so the aspect ratio never distorts', async () => {
+    const OffscreenCanvasCtor = vi.fn()
+    const drawImage = vi.fn()
+    const convertToBlob = vi.fn(async () => new Blob(['x'], { type: 'image/png' }))
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn(async () => ({ width: 4000, height: 2000, close: () => {} })),
+    )
+    vi.stubGlobal(
+      'OffscreenCanvas',
+      class {
+        constructor(width: number, height: number) {
+          OffscreenCanvasCtor(width, height)
+        }
+        getContext() {
+          return { drawImage, fillRect: vi.fn(), fillStyle: '', getImageData: vi.fn() }
+        }
+        convertToBlob = convertToBlob
+      },
+    )
+
+    await convertImage(new Blob(['x']), 'a', {
+      format: 'png',
+      quality: 80,
+      scale: '1' as const,
+      ...TRACE_DEFAULTS,
+      resize: '1920',
+    })
+
+    expect(OffscreenCanvasCtor).toHaveBeenCalledWith(1920, 960)
+    expect(drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, 1920, 960)
+    vi.unstubAllGlobals()
+  })
+
+  it('never upscales - a preset bigger than the source is a no-op', async () => {
+    const OffscreenCanvasCtor = vi.fn()
+    vi.stubGlobal(
+      'createImageBitmap',
+      vi.fn(async () => ({ width: 200, height: 100, close: () => {} })),
+    )
+    vi.stubGlobal(
+      'OffscreenCanvas',
+      class {
+        constructor(width: number, height: number) {
+          OffscreenCanvasCtor(width, height)
+        }
+        getContext() {
+          return {
+            drawImage: vi.fn(),
+            fillRect: vi.fn(),
+            fillStyle: '',
+            getImageData: vi.fn(),
+          }
+        }
+        convertToBlob = vi.fn(async () => new Blob(['x'], { type: 'image/png' }))
+      },
+    )
+
+    await convertImage(new Blob(['x']), 'a', {
+      format: 'png',
+      quality: 80,
+      scale: '1' as const,
+      ...TRACE_DEFAULTS,
+      resize: '3840',
+    })
+
+    expect(OffscreenCanvasCtor).toHaveBeenCalledWith(200, 100)
+    vi.unstubAllGlobals()
+  })
+
+  it('leaves dimensions untouched for "original", the default', async () => {
+    const { context } = stubImageApis({ width: 640, height: 480 })
+    _setCanvasSupportForTests('image/webp', true)
+
+    await convertImage(new Blob(['x']), 'a', {
+      format: 'webp',
+      quality: 80,
+      scale: '1' as const,
+      ...TRACE_DEFAULTS,
+      resize: 'original',
+    })
+
+    expect(context.drawImage).toHaveBeenCalledWith(expect.anything(), 0, 0, 640, 480)
   })
 })
 

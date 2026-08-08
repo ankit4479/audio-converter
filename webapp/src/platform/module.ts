@@ -47,9 +47,29 @@ export interface CapabilityReport {
 }
 
 /**
+ * What a field's `visibleIf` gets to look at (E2.5, issue #35): the settings object
+ * as it stands right now, and the page's source format when it has one (a hub page
+ * names no source - see ConverterShell). Split out as its own type because a
+ * *target*-conditional field (Quality, meaningless on a lossless target) and a
+ * *source*-conditional field (the SVG render scale, meaningless unless the input is
+ * a vector) need different halves of this to decide.
+ */
+export interface SettingVisibilityContext {
+  readonly values: Record<string, unknown>
+  readonly source?: FormatId
+}
+
+/**
  * Declarative description of one settings-panel field. A discriminated union so
  * the shared SettingsPanel (later issue) can render any module's settings from
  * data alone - modules never ship their own settings JSX.
+ *
+ * `visibleIf` is a plain function rather than a small condition language: every
+ * field here already lives in a plain TypeScript file (a module's index.ts is
+ * main-thread-only, never loaded inside the conversion Worker, so nothing about
+ * this needs to survive a serialization boundary), and a string-based DSL would
+ * need its own parser for no real gain over a function the module already knows
+ * how to write. Omitted means always visible, matching every field before this.
  */
 export type SettingField =
   | {
@@ -57,6 +77,7 @@ export type SettingField =
       readonly key: string
       readonly label: string
       readonly options: ReadonlyArray<{ readonly value: string; readonly label: string }>
+      readonly visibleIf?: (context: SettingVisibilityContext) => boolean
     }
   | {
       readonly kind: 'slider'
@@ -65,16 +86,19 @@ export type SettingField =
       readonly min: number
       readonly max: number
       readonly step: number
+      readonly visibleIf?: (context: SettingVisibilityContext) => boolean
     }
   | {
       readonly kind: 'toggle'
       readonly key: string
       readonly label: string
+      readonly visibleIf?: (context: SettingVisibilityContext) => boolean
     }
   | {
       readonly kind: 'color'
       readonly key: string
       readonly label: string
+      readonly visibleIf?: (context: SettingVisibilityContext) => boolean
     }
 
 /** A running conversion engine for one module. One engine instance owns one Worker

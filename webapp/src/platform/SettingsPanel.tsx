@@ -13,24 +13,33 @@
  */
 import { useId } from 'react'
 import { SelectChevron } from '../components/SelectChevron'
-import type { SettingField } from './module'
+import type { FormatId, SettingField } from './module'
 
 export function SettingsPanel({
   schema,
   values,
+  source,
   onChange,
 }: {
   schema: readonly SettingField[]
   values: Record<string, unknown>
+  /** The page's source format, when it has one - see SettingVisibilityContext. */
+  source?: FormatId
   /** Called with the whole next values object, matching how every other settings
    *  surface in this app reports a change. */
   onChange: (values: Record<string, unknown>) => void
 }) {
-  if (schema.length === 0) return null
+  // Filtered here rather than by the caller, so "which fields apply" stays this
+  // component's own concern - a caller that pre-filtered would have to duplicate
+  // the { values, source } context shape SettingVisibilityContext already defines.
+  const visible = schema.filter(
+    (field) => field.visibleIf === undefined || field.visibleIf({ values, source }),
+  )
+  if (visible.length === 0) return null
 
   return (
     <div className="space-y-3">
-      {schema.map((field) => (
+      {visible.map((field) => (
         <Field
           key={field.key}
           field={field}

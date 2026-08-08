@@ -68,14 +68,36 @@ const DEFAULT_SETTINGS: ImageSettings = {
   traceColors: '8',
   traceDespeckle: 8,
   traceSmoothing: 1,
+  // No resize, and white under a target that drops alpha - both exactly the
+  // behaviour every existing conversion already had before either was a setting
+  // (E2.5, issue #35).
+  resize: 'original',
+  backgroundColor: '#ffffff',
 }
 
+/** Raster targets with a real quality dial. Not PNG (lossless, the slider would do
+ *  nothing) and not SVG (traced, not encoded - it has its own Colours/Despeckle/
+ *  Smoothing knobs instead). */
+const LOSSY_RASTER_FORMATS = new Set(['jpg', 'webp', 'avif'])
+
 /**
- * Quality is the one knob this issue ships. The resize and background-colour fields,
- * and making quality conditional on the target being lossy, are #35 - which is also
- * where the schema stops being a flat list. `format` is in the schema because it is
- * part of the settings shape, but the shell renders it as the URL-synced "Convert to"
- * control rather than an ordinary field (see platform/ModuleSettings).
+ * Raster targets that drop the alpha channel - today, only JPEG. Duplicated from
+ * convert.ts's own SUPPORTS_ALPHA rather than imported: convert.ts is worker-side
+ * and deliberately never value-imports platform/graph.ts or anything that would
+ * (see its header comment on why), and this file is main-thread-only and never
+ * loaded inside the conversion Worker, so the two sides of this fact cannot share
+ * one definition without breaking that boundary. Four literal ids; if this list
+ * ever needs to grow, convert.ts's SUPPORTS_ALPHA has to grow with it.
+ */
+const OPAQUE_ONLY_FORMATS = new Set(['jpg'])
+
+/**
+ * Every field below reads `format` (the target) or `source` (the page's own source
+ * format, when it has one) to decide whether it means anything on this page -
+ * SettingsPanel filters on `visibleIf` before rendering, so a hidden field simply
+ * isn't in the DOM rather than shown disabled. `format` itself has no `visibleIf`:
+ * it is the field the URL owns, always meaningful, and the shell renders it as the
+ * "Convert to" control rather than an ordinary field (see platform/ModuleSettings).
  */
 const SETTINGS_SCHEMA: readonly SettingField[] = [
   {
@@ -98,12 +120,30 @@ const SETTINGS_SCHEMA: readonly SettingField[] = [
     min: 1,
     max: 100,
     step: 1,
+    visibleIf: ({ values }) => LOSSY_RASTER_FORMATS.has(String(values.format)),
   },
-  // Only meaningful for a vector source, which has no pixel size of its own (E2.3,
-  // issue #33). It shows on raster pages too for now, where it does nothing; making
-  // fields conditional on the source and target is #35's work, alongside the same
-  // treatment for the quality slider above.
-  // Only meaningful when the target is SVG. Conditional visibility is #35's work.
+  {
+    kind: 'select',
+    key: 'resize',
+    label: 'Resize',
+    options: [
+      { value: 'original', label: 'Original size' },
+      { value: '3840', label: '3840px · 4K' },
+      { value: '1920', label: '1920px · Full HD' },
+      { value: '1280', label: '1280px · HD' },
+      { value: '640', label: '640px' },
+    ],
+    // Not for an SVG target: tracing has no output pixel dimensions to cap - fidelity
+    // there is already the Colours/Despeckle/Smoothing knobs below.
+    visibleIf: ({ values }) => values.format !== 'svg',
+  },
+  {
+    kind: 'color',
+    key: 'backgroundColor',
+    label: 'Background',
+    visibleIf: ({ values }) => OPAQUE_ONLY_FORMATS.has(String(values.format)),
+  },
+  // Only meaningful when the target is SVG - tracing, not encoding.
   {
     kind: 'select',
     key: 'traceColors',
@@ -114,6 +154,7 @@ const SETTINGS_SCHEMA: readonly SettingField[] = [
       { value: '8', label: '8' },
       { value: '16', label: '16' },
     ],
+    visibleIf: ({ values }) => values.format === 'svg',
   },
   {
     kind: 'slider',
@@ -122,6 +163,7 @@ const SETTINGS_SCHEMA: readonly SettingField[] = [
     min: 0,
     max: 32,
     step: 1,
+    visibleIf: ({ values }) => values.format === 'svg',
   },
   {
     kind: 'slider',
@@ -130,6 +172,7 @@ const SETTINGS_SCHEMA: readonly SettingField[] = [
     min: 0,
     max: 4,
     step: 1,
+    visibleIf: ({ values }) => values.format === 'svg',
   },
   {
     kind: 'select',
@@ -141,6 +184,9 @@ const SETTINGS_SCHEMA: readonly SettingField[] = [
       { value: '3', label: '3x' },
       { value: '4', label: '4x' },
     ],
+    // Conditional on the *source*, not the target: this sizes the rasterization of
+    // an incoming SVG (#33), which has nothing to do with what format it becomes.
+    visibleIf: ({ source }) => source === 'svg',
   },
 ]
 
