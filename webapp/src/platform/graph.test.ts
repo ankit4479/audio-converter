@@ -13,8 +13,8 @@ import {
   slugToEdge,
 } from './graph'
 
-const ENCODABLE_TARGETS = ['mp3', 'aac', 'flac', 'wav', 'opus', 'aiff']
-const NOT_YET_IMPLEMENTED = ['alac', 'wavpack', 'vorbis', 'wma']
+const ENCODABLE_TARGETS = ['mp3', 'aac', 'flac', 'wav', 'opus', 'aiff', 'vorbis']
+const NOT_YET_IMPLEMENTED = ['alac', 'wavpack', 'wma']
 
 describe('audio format nodes', () => {
   it('has one node per CodecId', () => {
@@ -31,6 +31,7 @@ describe('audio format nodes', () => {
   it('mime is present for encodable targets, undefined for not-yet-implemented codecs', () => {
     expect(formatNode('mp3')?.mime).toBe('audio/mpeg')
     expect(formatNode('aiff')?.mime).toBe('audio/aiff')
+    expect(formatNode('vorbis')?.mime).toBe('audio/ogg')
     for (const id of NOT_YET_IMPLEMENTED) {
       expect(formatNode(id)?.mime).toBeUndefined()
     }

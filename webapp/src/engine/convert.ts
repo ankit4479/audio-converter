@@ -23,6 +23,7 @@ import {
 import { aiffFileName, wavToAiff } from './aiff'
 import { SAMPLE_RATE_HZ, type ConversionSettings } from './codec'
 import { encodableFormatFor, outputFileName } from './formats'
+import { wavToVorbis } from './vorbis'
 
 export type ConversionErrorReason =
   | 'no-audio-track'
@@ -137,6 +138,21 @@ export async function convertFile(
       blob: new Blob([aiffBytes.buffer as ArrayBuffer], { type: 'audio/aiff' }),
       fileName: aiffFileName(baseName),
     }
+  }
+
+  if (settings.codec === 'vorbis') {
+    // No Mediabunny OutputFormat fits (vorbis.ts's header comment has the
+    // confirmation) - same shape as the AIFF branch above: decode/resample via the
+    // already-correct WAV path, then hand the resulting PCM to the WASM encoder.
+    const wavResult = await convertFile(
+      file,
+      baseName,
+      { ...settings, codec: 'wav' },
+      options,
+    )
+    const wavBytes = new Uint8Array(await wavResult.blob.arrayBuffer())
+    const blob = await wavToVorbis(wavBytes, settings.quality)
+    return { blob, fileName: outputFileName(baseName, 'vorbis') }
   }
 
   const encodable = encodableFormatFor(settings.codec)

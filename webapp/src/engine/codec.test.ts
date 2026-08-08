@@ -154,15 +154,14 @@ describe('CODECS', () => {
     expect(new Set(supporting)).toEqual(new Set(['mp3', 'flac', 'alac', 'aac']))
   })
 
-  it('marks ALAC, WavPack, and WMA unsupported, with Vorbis provisionally unsupported pending #12', () => {
+  it('marks ALAC, WavPack, and WMA unsupported - no viable browser or WASM encoder exists (#13)', () => {
     expect(CODECS.alac.availability).toBe('unsupportedInBrowser')
     expect(CODECS.wavpack.availability).toBe('unsupportedInBrowser')
     expect(CODECS.wma.availability).toBe('unsupportedInBrowser')
-    expect(CODECS.vorbis.availability).toBe('unsupportedInBrowser')
   })
 
-  it('marks MP3, FLAC, WAV, and AIFF supported (native or a bundled WASM fallback works regardless of browser)', () => {
-    for (const id of ['mp3', 'flac', 'wav', 'aiff'] as const) {
+  it('marks MP3, FLAC, WAV, AIFF, and Vorbis supported (native or a bundled WASM fallback works regardless of browser)', () => {
+    for (const id of ['mp3', 'flac', 'wav', 'aiff', 'vorbis'] as const) {
       expect(CODECS[id].availability).toBe('supported')
     }
   })

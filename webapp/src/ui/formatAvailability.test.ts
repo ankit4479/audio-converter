@@ -27,8 +27,8 @@ describe('detectBrowserName', () => {
 })
 
 describe('getCodecAvailabilityInfo', () => {
-  it('supported codecs (mp3/flac/wav/aiff) are always enabled regardless of detection', () => {
-    for (const id of ['mp3', 'flac', 'wav', 'aiff'] as const) {
+  it('supported codecs (mp3/flac/wav/aiff/vorbis) are always enabled regardless of detection', () => {
+    for (const id of ['mp3', 'flac', 'wav', 'aiff', 'vorbis'] as const) {
       expect(getCodecAvailabilityInfo(id, BOTH_UNAVAILABLE)).toEqual({
         disabled: false,
         reason: null,
@@ -36,7 +36,7 @@ describe('getCodecAvailabilityInfo', () => {
     }
   })
 
-  it('permanently unsupported codecs (alac/wavpack/wma/vorbis) are disabled with the "no encoder" wording, naming the format', () => {
+  it('permanently unsupported codecs (alac/wavpack/wma) are disabled with the "no encoder" wording, naming the format', () => {
     const alac = getCodecAvailabilityInfo('alac', BOTH_AVAILABLE)
     expect(alac.disabled).toBe(true)
     expect(alac.reason).toBe(

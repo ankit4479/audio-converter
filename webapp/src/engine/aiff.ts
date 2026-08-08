@@ -19,6 +19,7 @@
  */
 import { CODECS } from './codec'
 import { ConversionError } from './convert'
+import { parseWav } from './pcm'
 
 // AIFF's classic chunk sizes are 32-bit. Some tools/specs treat them as signed,
 // making 2^31 - 1 bytes the practical safe ceiling before ambiguity - the issue's
@@ -52,57 +53,6 @@ function writeIeee80BitFloat(view: DataView, offset: number, value: number): voi
   const biasedExponent = exponent + 16383
   view.setUint16(offset, biasedExponent, false)
   view.setBigUint64(offset + 2, mantissa, false)
-}
-
-interface ParsedWav {
-  numberOfChannels: number
-  sampleRate: number
-  bitsPerSample: number
-  pcmData: Uint8Array
-}
-
-/** Walks a WAV file's RIFF chunks to find 'fmt ' and 'data', ignoring any others
- *  (e.g. a 'LIST' metadata chunk) rather than assuming a fixed 44-byte header. */
-function parseWav(bytes: Uint8Array): ParsedWav {
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength)
-  const readChunkId = (offset: number) =>
-    String.fromCharCode(
-      bytes[offset],
-      bytes[offset + 1],
-      bytes[offset + 2],
-      bytes[offset + 3],
-    )
-
-  if (readChunkId(0) !== 'RIFF' || readChunkId(8) !== 'WAVE') {
-    throw new ConversionError('unknown', 'Intermediate WAV was malformed.')
-  }
-
-  let numberOfChannels: number | undefined
-  let sampleRate: number | undefined
-  let bitsPerSample: number | undefined
-  let pcmData: Uint8Array | undefined
-
-  let offset = 12
-  while (offset + 8 <= bytes.length) {
-    const chunkId = readChunkId(offset)
-    const chunkSize = view.getUint32(offset + 4, true)
-    const bodyStart = offset + 8
-
-    if (chunkId === 'fmt ') {
-      numberOfChannels = view.getUint16(bodyStart + 2, true)
-      sampleRate = view.getUint32(bodyStart + 4, true)
-      bitsPerSample = view.getUint16(bodyStart + 14, true)
-    } else if (chunkId === 'data') {
-      pcmData = bytes.subarray(bodyStart, bodyStart + chunkSize)
-    }
-
-    offset = bodyStart + chunkSize + (chunkSize % 2) // chunks are word-aligned
-  }
-
-  if (!numberOfChannels || !sampleRate || !bitsPerSample || !pcmData) {
-    throw new ConversionError('unknown', 'Intermediate WAV was missing required chunks.')
-  }
-  return { numberOfChannels, sampleRate, bitsPerSample, pcmData }
 }
 
 /** Builds a full AIFF file from a little-endian WAV's bytes. */

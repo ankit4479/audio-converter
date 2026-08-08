@@ -75,9 +75,9 @@ describe('AudioSettings - advanced settings caption switches by codec kind (Setu
 describe('AudioSettings - format picker only lists what this browser can actually produce', () => {
   // jsdom has no real WebCodecs, so canEncodeAudio always resolves false here once
   // the async detection effect settles - AAC/Opus (runtimeDetected) drop out along
-  // with the permanently-unsupported ALAC/WavPack/WMA/Vorbis, leaving only the
-  // formats with a real encoder path in this environment: MP3 (WASM), FLAC (WASM
-  // fallback), WAV (no codec needed), AIFF (hand-written writer).
+  // with the permanently-unsupported ALAC/WavPack/WMA, leaving only the formats
+  // with a real encoder path in this environment: MP3 (WASM), FLAC (WASM
+  // fallback), WAV (no codec needed), AIFF and Vorbis (hand-written writers).
   function optionValues(select: HTMLSelectElement): string[] {
     return Array.from(select.options).map((o) => o.value)
   }
@@ -90,7 +90,6 @@ describe('AudioSettings - format picker only lists what this browser can actuall
     })
     expect(optionValues(select)).not.toContain('wavpack')
     expect(optionValues(select)).not.toContain('wma')
-    expect(optionValues(select)).not.toContain('vorbis')
   })
 
   it('drops runtime-detected formats once detection confirms this browser lacks them', async () => {
@@ -106,13 +105,19 @@ describe('AudioSettings - format picker only lists what this browser can actuall
     renderSetup()
     const select = screen.getByLabelText('Convert to') as HTMLSelectElement
     await waitFor(() => {
-      expect(optionValues(select).sort()).toEqual(['aiff', 'flac', 'mp3', 'wav'])
+      expect(optionValues(select).sort()).toEqual([
+        'aiff',
+        'flac',
+        'mp3',
+        'vorbis',
+        'wav',
+      ])
     })
     const groups = Array.from(select.children).filter(
       (el): el is HTMLOptGroupElement => el.tagName === 'OPTGROUP',
     )
     expect(groups.find((g) => g.label === 'Common')!.children).toHaveLength(3) // mp3, flac, wav
-    expect(groups.find((g) => g.label === 'More Formats')!.children).toHaveLength(1) // aiff
+    expect(groups.find((g) => g.label === 'More Formats')!.children).toHaveLength(2) // aiff, vorbis
   })
 
   it('falls back to a still-available codec if the selected one drops out of the list', async () => {

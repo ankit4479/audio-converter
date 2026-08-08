@@ -71,10 +71,11 @@ function FormatPickerSection({
   }, [])
 
   // Formats this browser genuinely cannot produce - no native encoder and (for
-  // ALAC/WavPack/WMA/Vorbis specifically) no WASM path either - are left out of the
+  // ALAC/WavPack/WMA specifically) no WASM path either - are left out of the
   // list entirely rather than shown disabled with an explanation. Simpler for
   // anyone just trying to pick a format that works; a browser-support note lives in
-  // the README/docs for anyone who goes looking for a missing format.
+  // the README/docs for anyone who goes looking for a missing format. Vorbis has a
+  // WASM path (issue #37) so it's offered like MP3/FLAC/AIFF, not excluded here.
   const isSupported = (id: CodecId) => !getCodecAvailabilityInfo(id, detection).disabled
   const isOffered = (id: CodecId) => id !== source && isSupported(id)
   const optionsFor = (group: 'common' | 'more') =>

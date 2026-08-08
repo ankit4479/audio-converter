@@ -68,7 +68,15 @@ const BASE_SETTINGS: ConversionSettings = {
 }
 
 describe('convertFile - not-implemented codecs', () => {
-  const IMPLEMENTED_CODECS = new Set(['wav', 'mp3', 'aac', 'opus', 'flac', 'aiff'])
+  const IMPLEMENTED_CODECS = new Set([
+    'wav',
+    'mp3',
+    'aac',
+    'opus',
+    'flac',
+    'aiff',
+    'vorbis',
+  ])
   it.each(CODEC_IDS.filter((id) => !IMPLEMENTED_CODECS.has(id)))(
     'rejects %s with reason not-implemented, without touching the file at all',
     async (codec) => {
@@ -460,5 +468,33 @@ describe('convertFile - AIFF end to end', () => {
     const view = new DataView(bytes.buffer)
     expect(view.getUint16(28, false)).toBe(0x400e) // 44100's biased exponent
     expect(view.getUint32(30, false)).toBe(0xac440000)
+  })
+})
+
+describe('convertFile - Vorbis end to end (#37)', () => {
+  it('produces a playable Ogg Vorbis file through the full convertFile path', async () => {
+    const result = await convertFile(makeWav(8000 * 2, 8000), 'test', {
+      ...BASE_SETTINGS,
+      codec: 'vorbis',
+    })
+    expect(result.fileName).toBe('test.ogg')
+    expect(result.blob.type).toBe('audio/ogg')
+    const bytes = new Uint8Array(await result.blob.arrayBuffer())
+    expect(String.fromCharCode(...bytes.subarray(0, 4))).toBe('OggS')
+  })
+
+  it('resamples when a sample rate is requested, same as the WAV path AIFF also reuses', async () => {
+    // A resampled source produces different-sized encoder output than the original
+    // rate would - proof the WAV path's resample actually ran before Vorbis encoded it.
+    const original = await convertFile(makeWav(8000, 8000), 'test', {
+      ...BASE_SETTINGS,
+      codec: 'vorbis',
+    })
+    const resampled = await convertFile(makeWav(8000, 8000), 'test', {
+      ...BASE_SETTINGS,
+      codec: 'vorbis',
+      sampleRate: 'hz44100',
+    })
+    expect(resampled.blob.size).not.toBe(original.blob.size)
   })
 })

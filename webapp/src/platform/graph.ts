@@ -23,7 +23,7 @@ export interface FormatNode {
   readonly label: string
   readonly extensions: readonly string[]
   /** Undefined where no MIME type is established anywhere in the codebase (the
-   *  not-yet-implemented codecs: alac, wavpack, vorbis, wma have none, per
+   *  not-yet-implemented codecs: alac, wavpack, wma have none, per
    *  engine/formats.ts's ENCODABLE_FORMATS). */
   readonly mime?: string
   readonly category: CategoryId
@@ -35,11 +35,15 @@ export interface ConversionEdge {
   readonly moduleId: string
 }
 
-// aiff has no ENCODABLE_FORMATS entry (convert.ts writes it via a hand-rolled path,
-// aiff.ts, bypassing Mediabunny's OutputFormat table entirely - see formats.ts's
-// header comment) so it has no mimeType there either. audio/aiff is the type's
-// IANA-registered MIME type, not derived from this codebase.
-const MIME_OVERRIDES: Partial<Record<CodecId, string>> = { aiff: 'audio/aiff' }
+// aiff and vorbis have no ENCODABLE_FORMATS entry (convert.ts writes both via a
+// hand-rolled path - aiff.ts and vorbis.ts - bypassing Mediabunny's OutputFormat
+// table entirely, see formats.ts's header comment) so neither has a mimeType there
+// either. Both MIME types below are their IANA-registered ones, not derived from
+// this codebase.
+const MIME_OVERRIDES: Partial<Record<CodecId, string>> = {
+  aiff: 'audio/aiff',
+  vorbis: 'audio/ogg',
+}
 
 function mimeFor(id: CodecId): string | undefined {
   return ENCODABLE_FORMATS[id]?.mimeType ?? MIME_OVERRIDES[id]
@@ -54,14 +58,14 @@ const AUDIO_FORMAT_NODES: readonly FormatNode[] = CODEC_IDS.map((id) => ({
 }))
 
 // Today's actually-working output targets: ENCODABLE_FORMATS has a real encoder
-// (mp3/aac/flac/wav/opus), or the codec has its own hand-rolled writer (aiff).
-// alac/wavpack/vorbis/wma remain unimplemented (see formats.ts, codec.ts's
+// (mp3/aac/flac/wav/opus), or the codec has its own hand-rolled writer (aiff, vorbis).
+// alac/wavpack/wma remain unimplemented (see formats.ts, codec.ts's
 // 'unsupportedInBrowser' availability) and are deliberately excluded as `to`
 // targets, though they still exist as FormatNodes above (e.g. as a `from` label).
 // Exported so modules/audio (#23) can build its outputFormats from the same
 // source of truth rather than re-deriving this filter a second time.
 export const AUDIO_ENCODABLE_TARGETS: readonly CodecId[] = CODEC_IDS.filter(
-  (id) => id === 'aiff' || ENCODABLE_FORMATS[id] !== null,
+  (id) => id === 'aiff' || id === 'vorbis' || ENCODABLE_FORMATS[id] !== null,
 )
 
 const AUDIO_MODULE_ID = 'audio'

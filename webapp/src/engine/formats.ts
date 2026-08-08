@@ -11,8 +11,10 @@
  *  - AIFF (#7): no Mediabunny OutputFormat exists for AIFF at all (its format list is
  *    MP4/MOV/WebM/MKV/HLS/WAVE/MP3/Ogg/ADTS/FLAC/MPEG-TS) — needs a hand-written writer
  *    reading decoded PCM directly, bypassing this table entirely.
- *  - Vorbis (#12): pending the viability spike; Mediabunny's AudioCodec union includes
- *    'vorbis', but WebCodecs Vorbis *encode* support is unconfirmed in any browser.
+ *  - Vorbis (#37): handled outside this table entirely, like AIFF - the WASM encoder
+ *    (wasm-media-encoders) returns fully Ogg-muxed bytes already, so it cannot be
+ *    wired in as a Mediabunny encoder for `OggOutputFormat` to mux a second time. See
+ *    vorbis.ts and convert.ts's `settings.codec === 'vorbis'` branch.
  *  - ALAC/WavPack/WMA: no Mediabunny encoder exists (its AudioCodec union has no such
  *    values) — permanently null, see issue #13.
  */

@@ -206,10 +206,10 @@ export const CODECS: Readonly<Record<CodecId, CodecDefinition>> = {
     fileExtension: 'ogg',
     supportsCompressionLevel: false,
     supportsEmbeddedArt: false,
-    // Provisional default pending the issue #12 spike. Flip to 'supported' or
-    // 'runtimeDetected' there if a viable WASM encoder is found; otherwise this
-    // stays and Vorbis joins ALAC/WavPack/WMA in issue #13's messaging.
-    availability: 'unsupportedInBrowser',
+    // Issue #12's spike found a viable WASM encoder (wasm-media-encoders, see
+    // docs/vorbis-encoder-spike.md); issue #37 wired it in. Works in every browser via
+    // WASM, so this is 'supported' rather than 'runtimeDetected'.
+    availability: 'supported',
   },
   wma: {
     label: 'WMA',
