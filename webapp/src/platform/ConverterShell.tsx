@@ -24,14 +24,16 @@ import { CombineConvertView } from '../screens/CombineConvertView'
 import { ConvertView } from '../screens/ConvertView'
 import { SetupView } from '../screens/SetupView'
 import { useConversion } from '../screens/useConversion'
+import { checkBrowserSupport } from './browserSupport'
 import { ClientOnlyWidget } from './ClientOnlyWidget'
 import { targetForEdge } from './converterTargets'
 import { formatNode, outputExtension } from './graph'
 import { ModuleSettings } from './ModuleSettings'
-import type { FormatId } from './module'
+import type { CapabilityReport, FormatId } from './module'
 import { requireModule } from './registry'
 import { rememberSettings, sharedSettings } from './sharedSettings'
 import { SiteFooter, SiteHeader } from './SiteChrome'
+import { UnsupportedBrowserScreen } from './UnsupportedBrowserScreen'
 
 export interface ConverterShellProps {
   /** Which registered module drives this page. */
@@ -95,7 +97,51 @@ export function ConverterShell({
   )
 }
 
-function ConverterWidget({
+/**
+ * Gates the real widget behind two capability checks (issue #16, the web
+ * equivalent of the Mac app's MissingFFmpegView): the app-wide floor
+ * (browserSupport.ts - Worker/WebAssembly/File API), checked synchronously so
+ * it blocks the very first render with no flash of the widget first, and the
+ * page's own module.probe(), which catches a module-specific gap (e.g. the
+ * image module on Safari < 16.4). The module check is async (audio's probe
+ * awaits WebCodecs detection), so it optimistically assumes supported until
+ * proven otherwise rather than blanking the widget while it resolves - the
+ * rare module-unsupported case swaps the widget out a beat later instead of
+ * delaying first paint for the overwhelming common case.
+ */
+function ConverterWidget(props: Pick<ConverterShellProps, 'moduleId' | 'source' | 'target'>) {
+  const module = requireModule(props.moduleId)
+  const generalSupport = checkBrowserSupport()
+  const [moduleSupport, setModuleSupport] = useState<CapabilityReport>({ supported: true })
+
+  useEffect(() => {
+    if (!generalSupport.supported) return
+    let cancelled = false
+    void module.probe().then((report) => {
+      if (!cancelled) setModuleSupport(report)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [module, generalSupport.supported])
+
+  const failure = !generalSupport.supported
+    ? generalSupport
+    : !moduleSupport.supported
+      ? moduleSupport
+      : null
+  if (failure) {
+    return (
+      <UnsupportedBrowserScreen
+        reason={failure.reason ?? 'This browser is missing something the converter needs.'}
+      />
+    )
+  }
+
+  return <SupportedConverterWidget {...props} />
+}
+
+function SupportedConverterWidget({
   moduleId,
   source,
   target,

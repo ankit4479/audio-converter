@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryRouter, RouterProvider } from 'react-router'
 import {
   sharedIntakeStore,
@@ -14,6 +14,24 @@ import { liveCategories } from './converterTargets'
 import { allEdges, edgeToSlug, hubPath } from './graph'
 import { register, _resetForTests as resetRegistry } from './registry'
 import { _resetForTests as resetSettings } from './sharedSettings'
+
+// jsdom doesn't implement Worker at all (real browsers - the only place this app
+// runs - always do), which trips browserSupport.ts's floor check the moment any
+// page renders here. Scoped to this file rather than the shared test setup: some
+// WASM encoder glue (lame.js) feature-detects a real Worker global and tries to
+// use one when present, which hung engine tests when this was added globally -
+// see the metadata.test.ts regression this fix replaced.
+beforeAll(() => {
+  if (typeof window.Worker === 'undefined') {
+    // @ts-expect-error - stub only needs to exist, nothing here calls it for real.
+    window.Worker = class {
+      postMessage() {}
+      terminate() {}
+      addEventListener() {}
+      removeEventListener() {}
+    }
+  }
+})
 
 beforeEach(() => {
   resetRegistry()
@@ -360,5 +378,37 @@ describe('ConverterShell - a second module', () => {
       'svg',
       'webp',
     ])
+  })
+})
+
+// Issue #16: the web equivalent of the Mac app's MissingFFmpegView gate.
+describe('ConverterShell - unsupported browser', () => {
+  it('blocks the widget instead of the drop zone when the app-wide floor is missing', () => {
+    const realWorker = window.Worker
+    // @ts-expect-error - simulating a browser with no Worker support at all.
+    delete window.Worker
+    try {
+      renderAt('/wav-to-mp3')
+    } finally {
+      window.Worker = realWorker
+    }
+    expect(screen.getByText("This browser can't run the converter")).toBeInTheDocument()
+    expect(
+      screen.getByText(/doesn't support Web Workers/),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Drag songs or folders here')).toBeNull()
+  })
+
+  it('blocks the widget once a module reports itself unsupported', async () => {
+    const probe = vi.spyOn(imageModule, 'probe').mockResolvedValue({
+      supported: false,
+      reason: 'This browser is missing the image APIs the converter needs.',
+    })
+    renderAt('/png-to-webp')
+    expect(
+      await screen.findByText('This browser is missing the image APIs the converter needs.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Drag images or folders here')).toBeNull()
+    probe.mockRestore()
   })
 })
